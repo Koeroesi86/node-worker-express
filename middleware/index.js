@@ -273,7 +273,7 @@ const workerMiddleware = (options = {}) => {
               `${path.resolve(__dirname, './workerInvoke.js')} ${indexPath.replace(/\\/gi, '/')}`,
               {
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-                env: { ...config.env },
+                env: { PATH: process.env.PATH, ...config.env },
                 cwd: config.cwd,
               },
               typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
