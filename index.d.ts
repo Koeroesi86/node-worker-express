@@ -4,12 +4,13 @@ type MiddlewareOptions = {
   limitPerPath?: number|((path: string) => number),
   limitRequestBody?: number,
   idleCheckTimeout?: number,
-  onStdout?: void,
-  onStderr?: void,
+  onStdout?: (data: Buffer) => void,
+  onStderr?: (data: Buffer) => void,
   onExit?: void,
   index?: string[],
   env?: object,
   staticWorker?: string,
+  cwd?: string,
 }
 
 declare module '@koeroesi86/node-worker-express' {

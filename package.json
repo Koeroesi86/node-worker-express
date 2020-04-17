@@ -19,6 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "@koeroesi86/node-worker": "^1.0.3-6bc3bc7",
+    "@types/node": "^13.11.1",
     "uuid": "^7.0.3"
   },
   "devDependencies": {

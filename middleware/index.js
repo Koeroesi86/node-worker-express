@@ -156,10 +156,11 @@ const DEFAULT_OPTIONS = {
   index: [],
   env: {},
   staticWorker: path.resolve(__dirname, '../examples/staticWorker.js'),
+  cwd: process.cwd(),
 };
 
 /**
- * @param {DEFAULT_OPTIONS} options
+ * @param {MiddlewareOptions} options
  * @returns {function(...[*]=)}
  */
 const workerMiddleware = (options = {}) => {
@@ -273,6 +274,7 @@ const workerMiddleware = (options = {}) => {
               {
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
                 env: { ...config.env },
+                cwd: config.cwd,
               },
               typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
             ))
