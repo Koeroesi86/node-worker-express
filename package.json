@@ -1,0 +1,28 @@
+{
+  "name": "@koeroesi86/node-worker-express",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "author": {
+    "name": "Krisztian Korosi",
+    "url": "https://github.com/Koeroesi86"
+  },
+  "repository": "github:Koeroesi86/node-worker-express",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon examples/server.js",
+    "generate-version": "node scripts/version.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@koeroesi86/node-worker": "^1.0.3-6bc3bc7",
+    "uuid": "^7.0.3"
+  },
+  "devDependencies": {
+    "express": "^4.17.1",
+    "nodemon": "^2.0.3"
+  }
+}

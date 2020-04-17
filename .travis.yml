@@ -1,0 +1,17 @@
+language: node_js
+node_js:
+  - "12"
+cache:
+  yarn: true
+  directories:
+    - node_modules
+script:
+  - export NODE_ENV=production
+  - export TRAVIS_TAG="$(git rev-parse --short ${TRAVIS_COMMIT})"
+  - yarn generate-version
+deploy:
+  branch: master
+  provider: npm
+  skip_cleanup: true
+  email: $NPM_EMAIL
+  api_key: $NPM_TOKEN
