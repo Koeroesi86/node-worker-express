@@ -250,7 +250,7 @@ const workerMiddleware = (options = {}) => {
 
           Promise.resolve()
             .then(() => workerPool.getWorker(
-              indexPath.replace(/\\/gi, '/'),
+              indexPath,
               {
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
                 env: { PATH: process.env.PATH, ...config.env },
@@ -391,7 +391,8 @@ const workerMiddleware = (options = {}) => {
               response.on('finish', cleanupConnection)
             });
         }
-      });
+      })
+      .catch(e => next(e));
   };
 };
 
