@@ -150,6 +150,7 @@ const DEFAULT_OPTIONS = {
   limit: 0,
   limitPerPath: 0,
   limitRequestBody: 1000000,
+  limitRequestTimeout: 5000,
   idleCheckTimeout: 5,
   onStdout: () => {},
   onStderr: () => {},
@@ -187,7 +188,7 @@ const workerMiddleware = (options = {}) => {
 
     Promise.resolve()
       .then(() => Promise.race([
-        new Promise(r => setTimeout(r, config.limitRequestTimeout || 5000)),
+        new Promise(r => setTimeout(r, config.limitRequestTimeout)),
         new Promise(r => bodyParser({ limitRequestBody: config.limitRequestBody })(request, response, r)),
       ]))
       .then(() => {

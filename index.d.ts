@@ -3,6 +3,7 @@ type MiddlewareOptions = {
   limit?: number,
   limitPerPath?: number|((path: string) => number),
   limitRequestBody?: number,
+  limitRequestTimeout?: number,
   idleCheckTimeout?: number,
   onStdout?: (data: Buffer) => void,
   onStderr?: (data: Buffer) => void,
