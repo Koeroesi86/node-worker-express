@@ -392,7 +392,11 @@ const workerMiddleware = (options = {}) => {
             });
         }
       })
-      .catch(e => next(e));
+      .catch(e => {
+        response.writeHead(500, { 'Content-Type': 'text/plain' });
+        response.write(`${e}`);
+        response.end();
+      });
   };
 };
 
