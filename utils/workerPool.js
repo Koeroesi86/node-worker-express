@@ -1,4 +1,5 @@
 const { v4: uuid } = require('uuid');
+const path = require('path');
 const Worker = require('@koeroesi86/node-worker');
 
 const workerInstances = {};
@@ -12,6 +13,17 @@ function getNonBusyId(workerPath) {
     return !workerInstances[workerPath][id].busy;
   });
 }
+
+process.once('exit', () => {
+  Object.keys(workerInstances).forEach(workerPath => {
+    const workerInstance = workerInstances[workerPath];
+    Object.keys(workerInstance).forEach(id => {
+      if (workerInstance[id]) workerInstance[id].terminate();
+    })
+  });
+});
+
+const createWorkerCommand = workerPath => `node ${path.resolve(__dirname, '../middleware/workerInvoke.js')} ${workerPath}`;
 
 class WorkerPool {
   constructor({ overallLimit = 0, idleCheckTimeout = 5, onExit = () => {} }) {
@@ -42,7 +54,7 @@ class WorkerPool {
       return Promise.resolve()
         .then(() => {
           const id = uuid();
-          const instance = new Worker(`node ${workerPath}`, options);
+          const instance = new Worker(createWorkerCommand(workerPath), options);
 
           instance.addEventListenerOnce('close', code => {
             this.onExit(code, workerPath, id);

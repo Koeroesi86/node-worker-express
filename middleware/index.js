@@ -1,9 +1,10 @@
 const { v4: uuid } = require('uuid');
 const path = require('path');
-const { existsSync } = require('fs');
+const fs = require('fs');
 const url = require('url');
 const { WORKER_EVENT } = require('../constants');
 const WorkerPool = require('../utils/workerPool');
+const bodyParser = require('./bodyParser');
 
 const FORBIDDEN_PATHS = [
   '..'
@@ -168,6 +169,9 @@ const workerMiddleware = (options = {}) => {
     ...DEFAULT_OPTIONS,
     ...options,
   };
+  if (!config.root) {
+    throw new Error('No root path defined in configuration!');
+  }
   const rootPath = path.resolve(config.root);
   const workerPool = new WorkerPool({
     overallLimit: config.limit,
@@ -182,75 +186,50 @@ const workerMiddleware = (options = {}) => {
     } = url.parse(request.url, true);
 
     Promise.resolve()
-      .then(() => new Promise((res, rej) => {
-        let body = '';
-        request.on('data', data => {
-          body += data;
-
-          // Too much POST data, kill the connection!
-          // 1e6 === 1 * Math.pow(10, 6) === 1 * 1000000 ~~~ 1MB
-          if (body.length > (config.limitRequestBody || 1000000)) {
-            body = "";
-            response.writeHead(413, { 'Content-Type': 'text/plain' });
-            response.end();
-            request.connection.destroy();
-            rej();
-          }
-        });
-        request.on('end', () => {
-          request.body = body;
-          res();
-        });
-      }))
+      .then(() => Promise.race([
+        new Promise(r => setTimeout(r, config.limitRequestTimeout || 5000)),
+        new Promise(r => bodyParser({ limitRequestBody: config.limitRequestBody })(request, response, r)),
+      ]))
       .then(() => {
         let isIndex = false;
         const pathFragments = pathname.split(/\//gi).filter(Boolean);
         let currentPathFragments = pathFragments.slice();
 
-        if (currentPathFragments.find(p => FORBIDDEN_PATHS.includes(p))) return next();
-
-        let pathExists = false;
-        for (let i = currentPathFragments.length; i >= 0; i--) {
-          if (!pathExists) {
-            currentPathFragments.splice(i);
-            pathExists = existsSync(path.join(rootPath, ...currentPathFragments));
-          }
+        if (currentPathFragments.find(p => FORBIDDEN_PATHS.includes(p))) {
+          response.writeHead(500, { 'Content-Type': 'text/plain' });
+          response.end();
+          request.connection.destroy();
+          return next();
         }
 
+        let pathExists = false;
         let indexPath = path.join(rootPath, ...currentPathFragments);
 
-        if (currentPathFragments.length < pathFragments.length) {
-          let indexFound = false;
-          for (let i = currentPathFragments.length; i >= 0; i--) {
-            if (!indexFound) {
-              currentPathFragments.splice(i);
-              indexFound = !!config.index.find(indexFile => {
-                const checkIndexFilePath = path.join(rootPath, ...currentPathFragments, indexFile);
-                if (existsSync(checkIndexFilePath)) {
+        for (let i = currentPathFragments.length; i >= 0; i--) {
+          if (pathExists) continue;
+            currentPathFragments.splice(i);
+            const currentPath = path.join(rootPath, ...currentPathFragments);
+            pathExists = fs.existsSync(currentPath);
+
+            if (!pathExists) continue;
+            const currentStats = fs.statSync(currentPath);
+
+            if (pathExists && currentStats.isDirectory()) {
+              // index fallback
+              pathExists = !!config.index.find(indexFile => {
+                const checkIndexFilePath = path.join(currentPath, indexFile);
+                if (fs.existsSync(checkIndexFilePath)) {
                   isIndex = true;
                   indexPath = checkIndexFilePath;
                   return true;
                 }
               });
+              if (pathExists) break;
+            } else if (pathExists && currentStats.isFile()) {
+              if (config.index.includes(currentPathFragments[currentPathFragments.length - 1])) {
+                isIndex = true;
+              }
             }
-          }
-        } else if (config.index.find(indexFile => {
-          const checkIndexFilePath = path.resolve(indexPath, indexFile);
-
-          if (existsSync(checkIndexFilePath)) {
-            indexPath = checkIndexFilePath;
-            isIndex = true;
-            return true;
-          }
-        })) { // detect index for trailing slash
-
-        } else {
-          config.index.find(indexFile => {
-            if (pathname.indexOf(indexFile) === pathname.length - indexFile.length) {
-              isIndex = true;
-              return true;
-            }
-          });
         }
 
         /** @var {RequestEvent} event */
@@ -266,11 +245,11 @@ const workerMiddleware = (options = {}) => {
         event.rootPath = rootPath;
 
         if (isIndex) {
-          // logger.info(`[${getDate()}] Invoking worker`, indexPath);
+          // console.info(`Invoking worker`, indexPath);
 
           Promise.resolve()
             .then(() => workerPool.getWorker(
-              `${path.resolve(__dirname, './workerInvoke.js')} ${indexPath.replace(/\\/gi, '/')}`,
+              indexPath.replace(/\\/gi, '/'),
               {
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
                 env: { PATH: process.env.PATH, ...config.env },
@@ -283,7 +262,7 @@ const workerMiddleware = (options = {}) => {
               const requestId = uuid();
 
               const requestSocketListener = data => {
-                // logger.info(`[${getDate()}] [${requestId}] [ws data in] ${parseWsMessage(data)}`);
+                // console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
               };
               if (event.protocol === PROTOCOLS.WEBSOCKET) {
                 request.socket.on('data', requestSocketListener);
@@ -311,7 +290,7 @@ const workerMiddleware = (options = {}) => {
                   }
 
                   if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
-                    // logger.info(`[${getDate()}] [${requestId}] [ws data out] ${responseEvent.event.frame}`);
+                    // console.info(`[${requestId}] [ws data out] ${responseEvent.event.frame}`);
                     request.socket.write(constructWsMessage(responseEvent.event.frame));
                   }
 
@@ -357,16 +336,16 @@ const workerMiddleware = (options = {}) => {
               }
             });
         } else if (['GET', 'HEAD'].includes(request.method.toUpperCase())) {
-          // logger.info(`[${getDate()}] Invoking worker`, indexPath);
+          // console.info(`Invoking static worker for ${indexPath}`);
 
           Promise.resolve()
             .then(() => workerPool.getWorker(
-              `${path.resolve(__dirname, './workerInvoke.js')} ${config.staticWorker}`,
+              config.staticWorker,
               {
                 cwd: process.cwd(),
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
               },
-              0))
+              1))
             .then(worker => {
               const requestId = uuid();
 
