@@ -77,7 +77,7 @@ const constructWsMessage = text => {
 
 /**
  * @param {module:http~IncomingMessage} request
- * @returns {string|null}
+ * @returns {string}
  */
 const getClientIp = request => {
   if (request.headers['x-client-ip']) {
@@ -142,7 +142,7 @@ const getClientIp = request => {
     return request.requestContext.identity.sourceIp;
   }
 
-  return null;
+  return '';
 };
 
 const DEFAULT_OPTIONS = {
@@ -162,13 +162,14 @@ const DEFAULT_OPTIONS = {
 };
 
 /**
- * @param {MiddlewareOptions} options
- * @returns {function(...[*]=)}
+ * @namespace Middleware
+ * @param {MiddlewareOptions} [options]
+ * @returns {RequestHandler}
  */
-const workerMiddleware = (options = {}) => {
+const workerMiddleware = (options) => {
   const config = {
     ...DEFAULT_OPTIONS,
-    ...options,
+    ...(options && options),
   };
   if (!config.root) {
     throw new Error('No root path defined in configuration!');
@@ -233,17 +234,18 @@ const workerMiddleware = (options = {}) => {
             }
         }
 
-        /** @var {RequestEvent} event */
-        const event = {};
-        event.httpMethod = request.method.toUpperCase();
-        event.protocol = isWebSocket(request) ? PROTOCOLS.WEBSOCKET : PROTOCOLS.HTTP;
-        event.path = pathname;
-        event.pathFragments = pathFragments;
-        event.queryStringParameters = queryStringParameters;
-        event.headers = request.headers;
-        event.remoteAddress = getClientIp(request);
-        event.body = request.body;
-        event.rootPath = rootPath;
+        /** @type {RequestEvent} */
+        const event = {
+          httpMethod: request.method.toUpperCase(),
+          protocol: isWebSocket(request) ? PROTOCOLS.WEBSOCKET : PROTOCOLS.HTTP,
+          path: pathname,
+          pathFragments: pathFragments,
+          queryStringParameters: JSON.parse(JSON.stringify(queryStringParameters)),
+          headers: request.headers,
+          remoteAddress: getClientIp(request),
+          body: `${request.body}`,
+          rootPath: rootPath,
+        };
 
         if (isIndex) {
           // console.info(`Invoking worker`, indexPath);
@@ -263,7 +265,7 @@ const workerMiddleware = (options = {}) => {
               const requestId = uuid();
 
               const requestSocketListener = data => {
-                // console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
+                console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
               };
               if (event.protocol === PROTOCOLS.WEBSOCKET) {
                 request.socket.on('data', requestSocketListener);
@@ -282,6 +284,7 @@ const workerMiddleware = (options = {}) => {
                       type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
                       requestId,
                     });
+                    /** @type {ResponseEvent|WSFrameEvent} event */
                     const { event } = responseEvent;
                     const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
 
@@ -291,7 +294,7 @@ const workerMiddleware = (options = {}) => {
                   }
 
                   if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
-                    // console.info(`[${requestId}] [ws data out] ${responseEvent.event.frame}`);
+                    console.info(`[${requestId}] [ws data out] ${responseEvent.event.frame}`);
                     request.socket.write(constructWsMessage(responseEvent.event.frame));
                   }
 
@@ -330,9 +333,9 @@ const workerMiddleware = (options = {}) => {
                   request.socket.off('close', requestCloseListener);
                 }
               };
-              request.on('close', cleanupConnection);
               request.on('aborted', cleanupConnection);
               if (event.protocol === PROTOCOLS.HTTP) {
+                request.on('close', cleanupConnection);
                 response.on('finish', cleanupConnection)
               }
             });
@@ -388,7 +391,11 @@ const workerMiddleware = (options = {}) => {
               };
               request.on('close', cleanupConnection);
               request.on('aborted', cleanupConnection);
-              response.on('finish', cleanupConnection)
+              response.on('finish', () => {
+                if (event.protocol !== PROTOCOLS.WEBSOCKET) {
+                  cleanupConnection();
+                }
+              });
             });
         }
       })

@@ -1,30 +1,30 @@
 const { WORKER_EVENT } = require('../constants');
 
+/** @namespace Middleware */
+
+/** @type {InvokableWorker} worker */
 const worker = require(process.argv[2]);
-process.on('message', message => {
+
+/** @type {WorkerInputEvent} message */
+function messageListener(message) {
   if (message.type === WORKER_EVENT.REQUEST)  {
     process.send({
       type: WORKER_EVENT.REQUEST_ACKNOWLEDGE,
       requestId: message.requestId,
     });
     const callback = responseEvent => {
-      if (responseEvent.sendWsMessage) {
-        process.send({
-          type: WORKER_EVENT.WS_MESSAGE_SEND,
-          requestId: message.requestId,
-          event: responseEvent,
-        });
-      } else {
-        process.send({
-          type: WORKER_EVENT.RESPONSE,
-          requestId: message.requestId,
-          event: responseEvent,
-        });
+      /** @type {WorkerOutputEvent} e */
+      const e = {
+        type: responseEvent.sendWsMessage ? WORKER_EVENT.WS_MESSAGE_SEND : WORKER_EVENT.RESPONSE,
+        requestId: message.requestId,
+        event: responseEvent,
       }
+      process.send(e);
     };
     worker(message.event, callback);
   }
   if (message.type === WORKER_EVENT.WS_CONNECTION_CLOSE) {
+    /** @type {ResponseEvent} responseEvent */
     worker({ ...message.event, closed: true }, responseEvent => {
       process.send({
         type: WORKER_EVENT.WS_CONNECTION_CLOSE_ACKNOWLEDGE,
@@ -33,4 +33,6 @@ process.on('message', message => {
       });
     });
   }
-});
+}
+
+process.on('message', messageListener);

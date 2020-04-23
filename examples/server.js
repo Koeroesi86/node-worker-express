@@ -8,7 +8,7 @@ const host = 'localhost';
 
 app.use(middleware({
   root: path.resolve(__dirname, '../examples/public'),
-  limit: 1,
+  limit: 3,
   index: [
     'worker.js'
   ],
