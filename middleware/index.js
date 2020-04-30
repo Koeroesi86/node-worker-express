@@ -68,7 +68,8 @@ const constructWsMessage = text => {
   // Write the length of the JSON payload to the second byte
   let payloadOffset = 2;
   if (lengthByteCount > 0) {
-    buffer.writeUInt16BE(jsonByteLength, 2); payloadOffset += lengthByteCount;
+    buffer.writeUInt16BE(jsonByteLength, 2);
+    payloadOffset += lengthByteCount;
   }
   // Write the JSON data to the data buffer
   buffer.write(text, payloadOffset);
@@ -152,9 +153,12 @@ const DEFAULT_OPTIONS = {
   limitRequestBody: 1000000,
   limitRequestTimeout: 5000,
   idleCheckTimeout: 5,
-  onStdout: () => {},
-  onStderr: () => {},
-  onExit: () => {},
+  onStdout: () => {
+  },
+  onStderr: () => {
+  },
+  onExit: () => {
+  },
   index: [],
   env: {},
   staticWorker: path.resolve(__dirname, '../examples/staticWorker.js'),
@@ -209,29 +213,29 @@ const workerMiddleware = (options) => {
 
         for (let i = currentPathFragments.length; i >= 0; i--) {
           if (pathExists) continue;
-            currentPathFragments.splice(i);
-            const currentPath = path.join(rootPath, ...currentPathFragments);
-            pathExists = fs.existsSync(currentPath);
+          currentPathFragments.splice(i);
+          const currentPath = path.join(rootPath, ...currentPathFragments);
+          pathExists = fs.existsSync(currentPath);
 
-            if (!pathExists) continue;
-            const currentStats = fs.statSync(currentPath);
+          if (!pathExists) continue;
+          const currentStats = fs.statSync(currentPath);
 
-            if (pathExists && currentStats.isDirectory()) {
-              // index fallback
-              pathExists = !!config.index.find(indexFile => {
-                const checkIndexFilePath = path.join(currentPath, indexFile);
-                if (fs.existsSync(checkIndexFilePath)) {
-                  isIndex = true;
-                  indexPath = checkIndexFilePath;
-                  return true;
-                }
-              });
-              if (pathExists) break;
-            } else if (pathExists && currentStats.isFile()) {
-              if (config.index.includes(currentPathFragments[currentPathFragments.length - 1])) {
+          if (pathExists && currentStats.isDirectory()) {
+            // index fallback
+            pathExists = !!config.index.find(indexFile => {
+              const checkIndexFilePath = path.join(currentPath, indexFile);
+              if (fs.existsSync(checkIndexFilePath)) {
                 isIndex = true;
+                indexPath = checkIndexFilePath;
+                return true;
               }
+            });
+            if (pathExists) break;
+          } else if (pathExists && currentStats.isFile()) {
+            if (config.index.includes(currentPathFragments[currentPathFragments.length - 1])) {
+              isIndex = true;
             }
+          }
         }
 
         /** @type {RequestEvent} */
@@ -247,11 +251,9 @@ const workerMiddleware = (options) => {
           rootPath: rootPath,
         };
 
-        if (isIndex) {
-          // console.info(`Invoking worker`, indexPath);
-
-          Promise.resolve()
-            .then(() => workerPool.getWorker(
+        Promise.resolve()
+          .then(() => isIndex
+            ? workerPool.getWorker(
               indexPath,
               {
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
@@ -259,145 +261,95 @@ const workerMiddleware = (options) => {
                 cwd: config.cwd,
               },
               typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
-            ))
-            .then(worker => {
-              worker.busy = true;
-              const requestId = uuid();
-
-              const requestSocketListener = data => {
-                console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
-              };
-              if (event.protocol === PROTOCOLS.WEBSOCKET) {
-                request.socket.on('data', requestSocketListener);
-              }
-
-              worker.instance.stdout.off('data', config.onStdout);
-              worker.instance.stdout.on('data', config.onStdout);
-
-              worker.instance.stderr.off('data', config.onStderr);
-              worker.instance.stderr.on('data', config.onStderr);
-
-              const messageListener = responseEvent => {
-                if (responseEvent.requestId === requestId) {
-                  if (responseEvent.type === WORKER_EVENT.RESPONSE) {
-                    worker.postMessage({
-                      type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
-                      requestId,
-                    });
-                    /** @type {ResponseEvent|WSFrameEvent} event */
-                    const { event } = responseEvent;
-                    const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
-
-                    response.writeHead(event.statusCode, event.headers);
-                    response.write(Buffer.from(event.body, bufferEncoding));
-                    response.end();
-                  }
-
-                  if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
-                    console.info(`[${requestId}] [ws data out] ${responseEvent.event.frame}`);
-                    request.socket.write(constructWsMessage(responseEvent.event.frame));
-                  }
-
-                  if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
-                    worker.busy = false;
-                  }
-                }
-              };
-
-              const requestCloseListener =  () => {
-                worker.postMessage({
-                  type: WORKER_EVENT.WS_CONNECTION_CLOSE,
-                  requestId,
-                  event
-                });
-                if (request.socket && request.socket.off) request.socket.off('close', requestCloseListener);
-              };
-              request.socket.on('close', requestCloseListener);
-
-              worker.addEventListener('message', messageListener);
-              worker.postMessage({
-                type: WORKER_EVENT.REQUEST,
-                requestId,
-                event,
-              });
-
-              const cleanupConnection = () => {
-                worker.removeEventListener('message', messageListener);
-                if (request && request.off) {
-                  request.off('close', cleanupConnection);
-                  request.off('aborted', cleanupConnection);
-                }
-
-                if (request.socket && request.socket.off) {
-                  request.socket.off('data', requestSocketListener);
-                  request.socket.off('close', requestCloseListener);
-                }
-              };
-              request.on('aborted', cleanupConnection);
-              if (event.protocol === PROTOCOLS.HTTP) {
-                request.on('close', cleanupConnection);
-                response.on('finish', cleanupConnection)
-              }
-            });
-        } else if (['GET', 'HEAD'].includes(request.method.toUpperCase())) {
-          // console.info(`Invoking static worker for ${indexPath}`);
-
-          Promise.resolve()
-            .then(() => workerPool.getWorker(
+            )
+            : workerPool.getWorker(
               config.staticWorker,
               {
                 cwd: process.cwd(),
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
               },
-              1))
-            .then(worker => {
-              const requestId = uuid();
+              1
+            )
+          )
+          .then(worker => {
+            worker.busy = true;
+            const requestId = uuid();
 
-              const messageListener = responseEvent => {
-                if (responseEvent.requestId === requestId) {
-                  if (responseEvent.type === WORKER_EVENT.RESPONSE) {
-                    worker.postMessage({
-                      type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
-                      requestId,
-                    });
-                    const { event: e } = responseEvent;
-                    const bufferEncoding = e.isBase64Encoded ? 'base64' : 'utf8';
+            const requestSocketListener = data => {
+              console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
+            };
+            if (event.protocol === PROTOCOLS.WEBSOCKET) {
+              request.socket.on('data', requestSocketListener);
+            }
 
-                    response.writeHead(e.statusCode, e.headers);
-                    response.write(Buffer.from(e.body, bufferEncoding));
-                    response.end();
-                  }
+            worker.instance.stdout.off('data', config.onStdout);
+            worker.instance.stdout.on('data', config.onStdout);
 
-                  if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
-                    worker.busy = false;
-                  }
+            worker.instance.stderr.off('data', config.onStderr);
+            worker.instance.stderr.on('data', config.onStderr);
+
+            const messageListener = responseEvent => {
+              if (responseEvent.requestId === requestId) {
+                if (responseEvent.type === WORKER_EVENT.RESPONSE) {
+                  worker.postMessage({
+                    type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
+                    requestId,
+                  });
+                  /** @type {ResponseEvent|WSFrameEvent} event */
+                  const { event } = responseEvent;
+                  const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
+
+                  response.writeHead(event.statusCode, event.headers);
+                  response.write(Buffer.from(event.body, bufferEncoding));
+                  response.end();
                 }
-              };
 
-              worker.addEventListener('message', messageListener);
+                if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
+                  console.info(`[${requestId}] [ws data out] ${responseEvent.event.frame}`);
+                  request.socket.write(constructWsMessage(responseEvent.event.frame));
+                }
 
+                if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
+                  worker.busy = false;
+                }
+              }
+            };
+
+            const requestCloseListener = () => {
               worker.postMessage({
-                type: WORKER_EVENT.REQUEST,
+                type: WORKER_EVENT.WS_CONNECTION_CLOSE,
                 requestId,
-                event,
+                event
               });
+              if (request.socket && request.socket.off) request.socket.off('close', requestCloseListener);
+            };
+            request.socket.on('close', requestCloseListener);
 
-              const cleanupConnection = () => {
-                worker.removeEventListener('message', messageListener);
-                if (request && request.off) {
-                  request.off('close', cleanupConnection);
-                  request.off('aborted', cleanupConnection);
-                }
-              };
-              request.on('close', cleanupConnection);
-              request.on('aborted', cleanupConnection);
-              response.on('finish', () => {
-                if (event.protocol !== PROTOCOLS.WEBSOCKET) {
-                  cleanupConnection();
-                }
-              });
+            worker.addEventListener('message', messageListener);
+            worker.postMessage({
+              type: WORKER_EVENT.REQUEST,
+              requestId,
+              event,
             });
-        }
+
+            const cleanupConnection = () => {
+              worker.removeEventListener('message', messageListener);
+              if (request && request.off) {
+                request.off('close', cleanupConnection);
+                request.off('aborted', cleanupConnection);
+              }
+
+              if (request.socket && request.socket.off) {
+                request.socket.off('data', requestSocketListener);
+                request.socket.off('close', requestCloseListener);
+              }
+            };
+            request.on('aborted', cleanupConnection);
+            if (event.protocol === PROTOCOLS.HTTP) {
+              request.on('close', cleanupConnection);
+              response.on('finish', cleanupConnection)
+            }
+          });
       })
       .catch(e => {
         response.writeHead(500, { 'Content-Type': 'text/plain' });
