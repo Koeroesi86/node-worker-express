@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { execSync } = require('child_process');
 
 let timer;
 
@@ -117,26 +118,46 @@ function etag(body) {
 /**
  * TODO: implement
  * @param {Buffer} body
+ * @param {string} fileName
  * @returns {boolean|string}
  */
-function getCharset(body) {
+function getCharset(body, fileName) {
+  // Byte order mark
+  if (body[0] === 0xEF && body[1] === 0xBB && body[2] === 0xBF)
+    return 'utf8';
+  if (body[0] === 0xFE && body[1] === 0xFF)
+    return 'utf16be';
+  if (body[0] === 0xFF && body[1] === 0xFE)
+    return 'utf16le';
+  if (body.indexOf('ï»¿') === 0)
+    return 'iso-8859-1';
+
+  try {
+    const out = execSync(`file -b --mime-encoding ${fileName}`).toString('utf8').trim();
+    return out;
+  } catch (e) {
+    //
+  }
+
   return false;
 }
 
 const staticWorker = (event, callback = () => {}) => {
   debounce(() => {
-    // console.log('Exiting static worker.')
-  }, 5000);
+    console.log('Exiting static worker.');
+    process.exit(0);
+  }, 1000 * 60 * 30);
   const currentPath = `${event.path.replace(/\.{2,}/, '')}${/\/$/.test(event.path) ? 'index.html' : ''}`;
   const fileName = path.resolve(event.rootPath, `.${currentPath}`);
-  if (fs.existsSync(fileName)) {
+  if (['GET', 'HEAD'].includes(event.httpMethod) && fs.existsSync(fileName)) {
     // TODO: range request
     const bodyBuffer = fs.readFileSync(fileName);
     const stats = fs.statSync(fileName);
     const extension = path.extname(fileName);
     const contentType = getContentType(extension);
     const currentEtag = etag(bodyBuffer);
-    const charset = getCharset(bodyBuffer);
+    const charset = getCharset(bodyBuffer, fileName);
+
     const lastModified = new Date(stats.mtime);
     let isModified = true;
 
