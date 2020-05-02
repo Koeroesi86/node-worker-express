@@ -2,9 +2,7 @@ const { v4: uuid } = require('uuid');
 const path = require('path');
 const Worker = require('@koeroesi86/node-worker');
 
-/**
- * @var {WorkerPool[]}
- */
+/** @var {WorkerPool[]} */
 const pools = [];
 
 process.once('exit', () => {
@@ -21,7 +19,12 @@ const createWorkerCommand = workerPath => {
 };
 
 class WorkerPool {
-  constructor({ overallLimit = 0, idleCheckTimeout = 5, onExit = () => {} }) {
+  constructor({
+                overallLimit = 0,
+                idleCheckTimeout = 5,
+                onExit = () => {
+                }
+              }) {
     this.overallLimit = overallLimit;
     this.idleCheckTimeout = idleCheckTimeout;
     this.onExit = onExit;
@@ -46,17 +49,21 @@ class WorkerPool {
   }
 
   getNonBusyId(workerPath) {
-    return Object.keys(this.workers[workerPath] || {}).find(id => {
+    return this.workers[workerPath] ? Object.keys(this.workers[workerPath] || {}).find(id => {
       return !this.workers[workerPath][id].busy;
-    });
+    }) : undefined;
+  }
+
+  getWorkerCountForPath(p) {
+    return this.workers[p] ? Object.keys(this.workers[p]).length : 0;
   }
 
   getWorkerCount() {
-    return Object.keys(this.workers).reduce((result, current) => Object.keys(this.workers[current]).length + result, 0);
+    return Object.keys(this.workers).reduce((result, current) => this.getWorkerCountForPath(current) + result, 0);
   }
 
   isBeyondLimit(workerPath, limit) {
-    return (this.workers[workerPath] && limit > 0 && Object.keys(this.workers[workerPath]).length >= limit)
+    return (this.workers[workerPath] && limit > 0 && this.getWorkerCountForPath(workerPath) >= limit)
       || (this.overallLimit > 0 && this.getWorkerCount() >= this.overallLimit);
   }
 
@@ -69,30 +76,27 @@ class WorkerPool {
       return Promise.resolve()
         .then(() => new Promise(r => setTimeout(r, this.idleCheckTimeout)))
         .then(() => this.getWorker(workerPath, options, limit));
-    } else if (!this.workers[workerPath]) {
-      this._creating = true;
-      return Promise.resolve()
-        .then(() => {
-          const id = uuid();
-          const instance = new Worker(createWorkerCommand(workerPath), options);
-
-          instance.addEventListenerOnce('close', code => {
-            delete this.workers[workerPath][id];
-            this.onExit(code, workerPath, id);
-          });
-          this.workers[workerPath] = {
-            ...(this.workers[workerPath] && this.workers[workerPath]),
-            [id]: instance,
-          };
-
-          this._creating = false;
-          return Promise.resolve(instance);
-        });
     }
 
+    this._creating = true;
     return Promise.resolve()
-      .then(() => new Promise(r => setTimeout(r, this.idleCheckTimeout)))
-      .then(() => this.getWorker(workerPath, options, limit));
+      .then(() => {
+        const id = uuid();
+        const instance = new Worker(createWorkerCommand(workerPath), options);
+
+        instance.addEventListenerOnce('close', code => {
+          this.workers[workerPath][id] = null;
+          delete this.workers[workerPath][id];
+          this.onExit(code, workerPath, id);
+        });
+        this.workers[workerPath] = {
+          ...(this.workers[workerPath] && this.workers[workerPath]),
+          [id]: instance,
+        };
+
+        this._creating = false;
+        return Promise.resolve(instance);
+      });
   }
 }
 

@@ -272,7 +272,7 @@ const workerMiddleware = (options) => {
             )
           )
           .then(worker => {
-            worker.busy = true;
+            // worker.busy = true;
             const requestId = uuid();
 
             const requestSocketListener = data => {
@@ -322,6 +322,7 @@ const workerMiddleware = (options) => {
                 event
               });
               if (request.socket && request.socket.off) request.socket.off('close', requestCloseListener);
+              worker.removeEventListener('message', messageListener);
             };
             request.socket.on('close', requestCloseListener);
 
