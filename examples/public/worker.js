@@ -8,7 +8,7 @@ module.exports = (event, callback = () => {}) => {
     },
     body: `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         <title>It ${process.env.EXAMPLE}!</title>
       </head>
@@ -32,7 +32,6 @@ module.exports = (event, callback = () => {}) => {
                 }, 5000);
               });
             }
-            // TODO: fix
             connect();
           })();
         </script>
