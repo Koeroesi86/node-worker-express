@@ -4,149 +4,22 @@ const fs = require('fs');
 const url = require('url');
 const { WORKER_EVENT } = require('../constants');
 const WorkerPool = require('../utils/workerPool');
-const bodyParser = require('./bodyParser');
+const isWebSocket = require('../utils/isWebSocket');
+const parseWsMessage = require('../utils/parseWsMessage');
+const constructWsMessage = require('../utils/constructWsMessage');
+const getClientIp = require('../utils/getClientIp');
+const createBodyParser = require('./bodyParser');
 
-const FORBIDDEN_PATHS = [
+const ForbiddenPaths = [
   '..'
 ];
 
-const PROTOCOLS = {
-  HTTP: 'HTTP',
-  WEBSOCKET: 'WS',
+const Protocols = {
+  http: 'HTTP',
+  websocket: 'WS',
 };
 
-const isWebSocket = request => {
-  if (request.method !== 'GET') return false;
-
-  const connection = request.headers.connection || '';
-  const upgrade = request.headers.upgrade || '';
-
-  return request.method === 'GET' &&
-    connection.toLowerCase().split(/ *, */).indexOf('upgrade') >= 0 &&
-    upgrade.toLowerCase() === 'websocket';
-};
-
-/**
- * TODO: improve
- * @param {Buffer} data
- * @returns {string}
- */
-const parseWsMessage = data => {
-  const dl = data[1] & 127;
-  let ifm = 2;
-  if (dl === 126) {
-    ifm = 4;
-  } else if (dl === 127) {
-    ifm = 10;
-  }
-  let i = ifm + 4;
-  const masks = data.slice(ifm, i);
-  let index = 0;
-  let output = "";
-  const l = data.length;
-  while (i < l) {
-    output += String.fromCharCode(data[i++] ^ masks[index++ % 4]);
-  }
-  return output;
-};
-
-/**
- * TODO: improve
- * @param {String} text
- * @returns {Buffer}
- */
-const constructWsMessage = text => {
-  const jsonByteLength = Buffer.byteLength(text);
-  // Note: we're not supporting > 65535 byte payloads at this stage
-  const lengthByteCount = jsonByteLength < 126 ? 0 : 2;
-  const payloadLength = lengthByteCount === 0 ? jsonByteLength : 126;
-  const buffer = Buffer.alloc(2 + lengthByteCount + jsonByteLength);
-  // Write out the first byte, using opcode `1` to indicate that the message
-  // payload contains text data
-  buffer.writeUInt8(0b10000001, 0);
-  buffer.writeUInt8(payloadLength, 1);
-  // Write the length of the JSON payload to the second byte
-  let payloadOffset = 2;
-  if (lengthByteCount > 0) {
-    buffer.writeUInt16BE(jsonByteLength, 2);
-    payloadOffset += lengthByteCount;
-  }
-  // Write the JSON data to the data buffer
-  buffer.write(text, payloadOffset);
-  return buffer;
-};
-
-/**
- * @param {module:http~IncomingMessage} request
- * @returns {string}
- */
-const getClientIp = request => {
-  if (request.headers['x-client-ip']) {
-    return request.headers['x-client-ip'];
-  }
-
-  if (request.headers['x-forwarded-for']) {
-    return request.headers['x-forwarded-for'];
-  }
-
-  if (request.headers['cf-connecting-ip']) {
-    return request.headers['cf-connecting-ip'];
-  }
-
-  if (request.headers['fastly-client-ip']) {
-    return request.headers['fastly-client-ip'];
-  }
-
-  if (request.headers['true-client-ip']) {
-    return request.headers['true-client-ip'];
-  }
-
-  if (request.headers['x-real-ip']) {
-    return request.headers['x-real-ip'];
-  }
-
-  if (request.headers['x-cluster-client-ip']) {
-    return request.headers['x-cluster-client-ip'];
-  }
-
-  if (request.headers['x-forwarded']) {
-    return request.headers['x-forwarded'];
-  }
-
-  if (request.headers['forwarded-for']) {
-    return request.headers['forwarded-for'];
-  }
-
-  if (request.headers.forwarded) {
-    return request.headers.forwarded;
-  }
-
-  if (request.connection) {
-    if (request.connection.remoteAddress) {
-      return request.connection.remoteAddress;
-    }
-
-    if (request.connection.socket && request.connection.socket.remoteAddress) {
-      return request.connection.socket.remoteAddress;
-    }
-  }
-
-  if (request.socket && request.socket.remoteAddress) {
-    return request.socket.remoteAddress;
-  }
-
-  if (request.info && request.info.remoteAddress) {
-    return request.info.remoteAddress;
-  }
-
-  if (request.requestContext && request.requestContext.identity && request.requestContext.identity.sourceIp) {
-    return request.requestContext.identity.sourceIp;
-  }
-
-  return '';
-};
-
-const DEFAULT_OPTIONS = {
+const DefaultOptions = {
   root: null,
   limit: 0,
   limitPerPath: 0,
@@ -158,6 +31,11 @@ const DEFAULT_OPTIONS = {
   onStderr: () => {
   },
   onExit: () => {
+  },
+  onForbiddenPath: (request, response) => {
+    response.writeHead(500, { 'Content-Type': 'text/plain' });
+    response.end();
+    request.connection.destroy();
   },
   index: [],
   env: {},
@@ -172,7 +50,7 @@ const DEFAULT_OPTIONS = {
  */
 const workerMiddleware = (options) => {
   const config = {
-    ...DEFAULT_OPTIONS,
+    ...DefaultOptions,
     ...(options && options),
   };
   if (!config.root) {
@@ -184,29 +62,31 @@ const workerMiddleware = (options) => {
     onExit: config.onExit,
     idleCheckTimeout: config.idleCheckTimeout,
   });
+  const bodyParser = createBodyParser({ limitRequestBody: config.limitRequestBody });
 
   return (request, response, next) => {
     const {
       query: queryStringParameters,
       pathname
     } = url.parse(request.url, true);
+    request.pathFragments = pathname.split(/\//gi).filter(Boolean);
 
     Promise.resolve()
+      .then(() => new Promise((resolve, reject) => {
+        if(request.pathFragments.find(p => ForbiddenPaths.includes(p))) {
+          config.onForbiddenPath(request, response);
+          reject();
+        }
+        resolve();
+      }))
       .then(() => Promise.race([
-        new Promise(r => setTimeout(r, config.limitRequestTimeout)),
-        new Promise(r => bodyParser({ limitRequestBody: config.limitRequestBody })(request, response, r)),
+        new Promise((res, rej) => setTimeout(rej, config.limitRequestTimeout)),
+        new Promise(res => bodyParser(request, response, res)),
       ]))
       .then(() => {
-        let isIndex = false;
+        let isWorker = false;
         const pathFragments = pathname.split(/\//gi).filter(Boolean);
         let currentPathFragments = pathFragments.slice();
-
-        if (currentPathFragments.find(p => FORBIDDEN_PATHS.includes(p))) {
-          response.writeHead(500, { 'Content-Type': 'text/plain' });
-          response.end();
-          request.connection.destroy();
-          return next();
-        }
 
         let pathExists = false;
         let indexPath = path.join(rootPath, ...currentPathFragments);
@@ -225,7 +105,7 @@ const workerMiddleware = (options) => {
             pathExists = !!config.index.find(indexFile => {
               const checkIndexFilePath = path.join(currentPath, indexFile);
               if (fs.existsSync(checkIndexFilePath)) {
-                isIndex = true;
+                isWorker = true;
                 indexPath = checkIndexFilePath;
                 return true;
               }
@@ -233,7 +113,7 @@ const workerMiddleware = (options) => {
             if (pathExists) break;
           } else if (pathExists && currentStats.isFile()) {
             if (config.index.includes(currentPathFragments[currentPathFragments.length - 1])) {
-              isIndex = true;
+              isWorker = true;
             }
           }
         }
@@ -241,7 +121,7 @@ const workerMiddleware = (options) => {
         /** @type {RequestEvent} */
         const event = {
           httpMethod: request.method.toUpperCase(),
-          protocol: isWebSocket(request) ? PROTOCOLS.WEBSOCKET : PROTOCOLS.HTTP,
+          protocol: isWebSocket(request) ? Protocols.websocket : Protocols.http,
           path: pathname,
           pathFragments: pathFragments,
           queryStringParameters: JSON.parse(JSON.stringify(queryStringParameters)),
@@ -252,12 +132,12 @@ const workerMiddleware = (options) => {
         };
 
         Promise.resolve()
-          .then(() => isIndex
+          .then(() => isWorker
             ? workerPool.getWorker(
               indexPath,
               {
                 stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-                env: { PATH: process.env.PATH, ...config.env },
+                env: { ...process.env, ...config.env },
                 cwd: config.cwd,
               },
               typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
@@ -278,7 +158,7 @@ const workerMiddleware = (options) => {
             const requestSocketListener = data => {
               console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
             };
-            if (event.protocol === PROTOCOLS.WEBSOCKET) {
+            if (event.protocol === Protocols.websocket) {
               request.socket.on('data', requestSocketListener);
             }
 
@@ -346,7 +226,7 @@ const workerMiddleware = (options) => {
               }
             };
             request.on('aborted', cleanupConnection);
-            if (event.protocol === PROTOCOLS.HTTP) {
+            if (event.protocol === Protocols.http) {
               request.on('close', cleanupConnection);
               response.on('finish', cleanupConnection)
             }
