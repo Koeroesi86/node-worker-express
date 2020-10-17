@@ -63,40 +63,50 @@ const workerMiddleware = (options) => {
     idleCheckTimeout: config.idleCheckTimeout,
   });
   const bodyParser = createBodyParser({ limitRequestBody: config.limitRequestBody });
+  const aliasCache = {};
+  const workerCache = {};
 
-  return (request, response, next) => {
+  return async (request, response, next) => {
     const {
       query: queryStringParameters,
       pathname
     } = url.parse(request.url, true);
     request.pathFragments = pathname.split(/\//gi).filter(Boolean);
 
-    Promise.resolve()
-      .then(() => new Promise((resolve, reject) => {
-        if(request.pathFragments.find(p => ForbiddenPaths.includes(p))) {
+    try {
+      let isWorker = false;
+      const pathFragments = pathname.split(/\//gi).filter(Boolean);
+      let currentPathFragments = pathFragments.slice(0);
+      let pathExists = false;
+
+      await new Promise((resolve, reject) => {
+        if (request.pathFragments.find(p => ForbiddenPaths.includes(p))) {
           config.onForbiddenPath(request, response);
           reject();
         }
         resolve();
-      }))
-      .then(() => Promise.race([
+      });
+
+      await Promise.race([
         new Promise((res, rej) => setTimeout(rej, config.limitRequestTimeout)),
         new Promise(res => bodyParser(request, response, res)),
-      ]))
-      .then(() => {
-        let isWorker = false;
-        const pathFragments = pathname.split(/\//gi).filter(Boolean);
-        let currentPathFragments = pathFragments.slice();
+      ]);
+      let indexPath;
 
-        let pathExists = false;
-        let indexPath = path.join(rootPath, ...currentPathFragments);
+      if (aliasCache[pathname] && fs.existsSync(aliasCache[pathname])) {
+        isWorker = true;
+        indexPath = aliasCache[pathname];
+      } else if (workerCache[pathname] && fs.existsSync(workerCache[pathname])) {
+        isWorker = true;
+        indexPath = workerCache[pathname];
+      } else {
+        indexPath = path.join(rootPath, ...currentPathFragments)
 
-        for (let i = currentPathFragments.length; i >= 0; i--) {
+        for (let i = currentPathFragments.length; i >= 0 && !pathExists; i--) {
           if (pathExists) continue;
           currentPathFragments.splice(i);
           const currentPath = path.join(rootPath, ...currentPathFragments);
           pathExists = fs.existsSync(currentPath);
-
           if (!pathExists) continue;
           const currentStats = fs.statSync(currentPath);
 
@@ -107,6 +117,11 @@ const workerMiddleware = (options) => {
               if (fs.existsSync(checkIndexFilePath)) {
                 isWorker = true;
                 indexPath = checkIndexFilePath;
+                aliasCache[pathname] = checkIndexFilePath;
+                setTimeout(() => {
+                  aliasCache[pathname] = null;
+                  delete aliasCache[pathname];
+                }, 5000);
                 return true;
               }
             });
@@ -114,129 +129,140 @@ const workerMiddleware = (options) => {
           } else if (pathExists && currentStats.isFile()) {
             if (config.index.includes(currentPathFragments[currentPathFragments.length - 1])) {
               isWorker = true;
+              workerCache[pathname] = currentPath;
+              setTimeout(() => {
+                workerCache[pathname] = null;
+                delete workerCache[pathname];
+              }, 5000);
             }
           }
         }
+      }
 
-        /** @type {RequestEvent} */
-        const event = {
-          httpMethod: request.method.toUpperCase(),
-          protocol: isWebSocket(request) ? Protocols.websocket : Protocols.http,
-          path: pathname,
-          pathFragments: pathFragments,
-          queryStringParameters: JSON.parse(JSON.stringify(queryStringParameters)),
-          headers: request.headers,
-          remoteAddress: getClientIp(request),
-          body: `${request.body}`,
-          rootPath: rootPath,
-        };
+      /** @type {RequestEvent} */
+      const event = {
+        httpMethod: request.method.toUpperCase(),
+        protocol: isWebSocket(request) ? Protocols.websocket : Protocols.http,
+        path: pathname,
+        pathFragments: pathFragments,
+        queryStringParameters: JSON.parse(JSON.stringify(queryStringParameters)),
+        headers: request.headers,
+        remoteAddress: getClientIp(request),
+        body: `${request.body}`,
+        rootPath: rootPath,
+      };
 
-        Promise.resolve()
-          .then(() => isWorker
-            ? workerPool.getWorker(
-              indexPath,
-              {
-                stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-                env: { ...process.env, ...config.env },
-                cwd: config.cwd,
-              },
-              typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
-            )
-            : workerPool.getWorker(
-              config.staticWorker,
-              {
-                cwd: process.cwd(),
-                stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-              },
-              1
-            )
-          )
-          .then(worker => {
-            // worker.busy = true;
-            const requestId = uuid();
+      const worker = isWorker ? await workerPool.getWorker(
+        indexPath,
+        {
+          stdio: [ 'pipe', 'pipe', 'pipe', 'ipc' ],
+          env: { ...process.env, ...config.env },
+          cwd: config.cwd,
+        },
+        typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
+      ) : await workerPool.getWorker(
+        config.staticWorker,
+        {
+          cwd: process.cwd(),
+          stdio: [ 'pipe', 'pipe', 'pipe', 'ipc' ],
+        },
+        1
+      );
 
-            const requestSocketListener = data => {
-              console.info(`[${requestId}] [ws data in] ${parseWsMessage(data)}`);
-            };
-            if (event.protocol === Protocols.websocket) {
-              request.socket.on('data', requestSocketListener);
-            }
+      const requestId = uuid();
 
-            worker.instance.stdout.off('data', config.onStdout);
-            worker.instance.stdout.on('data', config.onStdout);
+      let firstReceived = false;
+      const requestSocketListener = data => {
+        const frame = parseWsMessage(data);
 
-            worker.instance.stderr.off('data', config.onStderr);
-            worker.instance.stderr.on('data', config.onStderr);
+        // TODO: filter open frame better
+        if (data.length === 8 && !firstReceived) {
+          firstReceived = true;
+          return;
+        }
 
-            const messageListener = responseEvent => {
-              if (responseEvent.requestId === requestId) {
-                if (responseEvent.type === WORKER_EVENT.RESPONSE) {
-                  worker.postMessage({
-                    type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
-                    requestId,
-                  });
-                  /** @type {ResponseEvent|WSFrameEvent} event */
-                  const { event } = responseEvent;
-                  const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
+        firstReceived = true;
 
-                  response.writeHead(event.statusCode, event.headers);
-                  response.write(Buffer.from(event.body, bufferEncoding));
-                  response.end();
-                }
+        worker.postMessage({
+          type: WORKER_EVENT.WS_MESSAGE_RECEIVE,
+          requestId,
+          event: { ...event, frame }
+        });
+      };
+      if (event.protocol === Protocols.websocket) {
+        request.socket.on('data', requestSocketListener);
+      }
 
-                if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
-                  console.info(`[${requestId}] [ws data out] ${responseEvent.event.frame}`);
-                  request.socket.write(constructWsMessage(responseEvent.event.frame));
-                }
+      worker.instance.stdout.off('data', config.onStdout);
+      worker.instance.stdout.on('data', config.onStdout);
 
-                if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
-                  worker.busy = false;
-                }
-              }
-            };
+      worker.instance.stderr.off('data', config.onStderr);
+      worker.instance.stderr.on('data', config.onStderr);
 
-            const requestCloseListener = () => {
-              worker.postMessage({
-                type: WORKER_EVENT.WS_CONNECTION_CLOSE,
-                requestId,
-                event
-              });
-              if (request.socket && request.socket.off) request.socket.off('close', requestCloseListener);
-              worker.removeEventListener('message', messageListener);
-            };
-            request.socket.on('close', requestCloseListener);
-
-            worker.addEventListener('message', messageListener);
+      const messageListener = responseEvent => {
+        if (responseEvent.requestId === requestId) {
+          if (responseEvent.type === WORKER_EVENT.RESPONSE) {
             worker.postMessage({
-              type: WORKER_EVENT.REQUEST,
+              type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
               requestId,
-              event,
             });
+            /** @type {ResponseEvent|WSFrameEvent} event */
+            const { event } = responseEvent;
+            const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
 
-            const cleanupConnection = () => {
-              worker.removeEventListener('message', messageListener);
-              if (request && request.off) {
-                request.off('close', cleanupConnection);
-                request.off('aborted', cleanupConnection);
-              }
+            response.writeHead(event.statusCode, event.headers);
+            response.write(Buffer.from(event.body, bufferEncoding));
+            response.end();
+          }
 
-              if (request.socket && request.socket.off) {
-                request.socket.off('data', requestSocketListener);
-                request.socket.off('close', requestCloseListener);
-              }
-            };
-            request.on('aborted', cleanupConnection);
-            if (event.protocol === Protocols.http) {
-              request.on('close', cleanupConnection);
-              response.on('finish', cleanupConnection)
-            }
-          });
-      })
-      .catch(e => {
-        response.writeHead(500, { 'Content-Type': 'text/plain' });
-        response.write(`${e}`);
-        response.end();
+          if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
+            request.socket.write(constructWsMessage(responseEvent.event.frame));
+          }
+
+          if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
+            worker.busy = false;
+          }
+        }
+      };
+
+      const requestCloseListener = () => {
+        worker.postMessage({
+          type: WORKER_EVENT.WS_CONNECTION_CLOSE,
+          requestId,
+          event
+        });
+        if (request.socket && request.socket.off) request.socket.off('close', requestCloseListener);
+        worker.removeEventListener('message', messageListener);
+      };
+      request.socket.on('close', requestCloseListener);
+
+      worker.addEventListener('message', messageListener);
+      worker.postMessage({
+        type: WORKER_EVENT.REQUEST,
+        requestId,
+        event,
       });
+
+      const cleanupConnection = () => {
+        worker.removeEventListener('message', messageListener);
+        if (request && request.off) {
+          request.off('close', cleanupConnection);
+          request.off('aborted', cleanupConnection);
+        }
+
+        if (request.socket && request.socket.off) {
+          request.socket.off('data', requestSocketListener);
+          request.socket.off('close', requestCloseListener);
+        }
+      };
+      request.on('aborted', cleanupConnection);
+      if (event.protocol === Protocols.http) {
+        request.on('close', cleanupConnection);
+        response.on('finish', cleanupConnection)
+      }
+    } catch (e) {
+      next(e);
+    }
   };
 };
 

@@ -25,6 +25,8 @@ declare namespace Middleware {
     remoteAddress: string;
     body: string;
     rootPath: string;
+    closed?: boolean;
+    frame?: string;
   }
 
   type WorkerInputEvent = {
@@ -51,7 +53,7 @@ declare namespace Middleware {
     frame: string;
   }
 
-  function InvokableWorker(event: RequestEvent, callback: (e: ResponseEvent) => void): void;
+  type InvokableWorker = (event: RequestEvent, callback: (e: ResponseEvent) => void) => void;
 }
 
 declare module '@koeroesi86/node-worker-express' {

@@ -23,6 +23,20 @@ function messageListener(message) {
     };
     worker(message.event, callback);
   }
+
+  if (message.type === WORKER_EVENT.WS_MESSAGE_RECEIVE) {
+    const callback = responseEvent => {
+      /** @type {WorkerOutputEvent} e */
+      const e = {
+        type: WORKER_EVENT.WS_MESSAGE_SEND,
+        requestId: message.requestId,
+        event: responseEvent,
+      }
+      process.send(e);
+    };
+    worker(message.event, callback);
+  }
+
   if (message.type === WORKER_EVENT.WS_CONNECTION_CLOSE) {
     /** @type {ResponseEvent} responseEvent */
     worker({ ...message.event, closed: true }, responseEvent => {

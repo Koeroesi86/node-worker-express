@@ -1,5 +1,14 @@
-const bodyParser = (config = { limitRequestBody: 1000000 }) => (request, response, next) => {
+const ignoredMethods = ['get', 'delete', 'options', 'head'];
+
+const bodyParser = (config = { limitRequestBody: 1000000, shouldError: true }) => (request, response, next) => {
   let body = '';
+
+  if (ignoredMethods.includes(request.method.toLowerCase())) {
+    request.body = body;
+    next();
+    return;
+  }
+
   request.on('data', data => {
     body += data;
 
@@ -7,12 +16,17 @@ const bodyParser = (config = { limitRequestBody: 1000000 }) => (request, respons
     // 1e6 === 1 * Math.pow(10, 6) === 1 * 1000000 ~~~ 1MB
     if (body.length > (config.limitRequestBody || 1000000)) {
       body = "";
-      response.writeHead(413, { 'Content-Type': 'text/plain' });
-      response.end();
-      request.connection.destroy();
-      // next();
+
+      if (config.shouldError) {
+        response.writeHead(413, { 'Content-Type': 'text/plain' });
+        response.end();
+        request.connection.destroy();
+      } else {
+        next();
+      }
     }
   });
+
   request.on('end', () => {
     request.body = body;
     next();

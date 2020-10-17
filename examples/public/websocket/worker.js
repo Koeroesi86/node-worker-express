@@ -9,7 +9,7 @@ const createDigest = key => createHash('sha1')
   .digest('base64');
 
 module.exports = (event, callback) => {
-  if (event.protocol === 'WS') {
+  if (event.protocol === 'WS' && event.frame === undefined) {
     const key = (event.headers['sec-websocket-key'] || '').trim();
     const digest = createDigest(key);
 
@@ -32,13 +32,20 @@ module.exports = (event, callback) => {
       });
 
       timers[key] = setInterval(() => {
+        const frame = JSON.stringify({ now: Date.now() })
+        console.log('outgoing message:', frame);
         callback({
           sendWsMessage: true,
-          frame: JSON.stringify({ now: Date.now() }),
+          frame,
         });
       }, 1000);
       return;
     }
+  }
+
+  if (event.protocol === 'WS' && event.frame !== undefined) {
+    console.log('incoming message:', event.frame);
+    return;
   }
 
   callback({

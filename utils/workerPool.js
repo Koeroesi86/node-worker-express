@@ -67,36 +67,34 @@ class WorkerPool {
       || (this.overallLimit > 0 && this.getWorkerCount() >= this.overallLimit);
   }
 
-  getWorker(workerPath, options = {}, limit = 0) {
+  async getWorker(workerPath, options = {}, limit = 0) {
     const nonBusyId = this.getNonBusyId(workerPath);
     // TODO: tidy up
     if (nonBusyId !== undefined) {
-      return Promise.resolve(this.workers[workerPath][nonBusyId]);
+      return this.workers[workerPath][nonBusyId];
     } else if (this.isBeyondLimit(workerPath, limit) || this._creating) {
-      return Promise.resolve()
-        .then(() => new Promise(r => setTimeout(r, this.idleCheckTimeout)))
-        .then(() => this.getWorker(workerPath, options, limit));
+      await new Promise(r => setTimeout(r, this.idleCheckTimeout));
+      return this.getWorker(workerPath, options, limit);
     }
 
     this._creating = true;
-    return Promise.resolve()
-      .then(() => {
-        const id = uuid();
-        const instance = new Worker(createWorkerCommand(workerPath), options);
+    const id = uuid();
+    const instance = new Worker(createWorkerCommand(workerPath), options);
 
-        instance.addEventListenerOnce('close', code => {
-          this.workers[workerPath][id] = null;
-          delete this.workers[workerPath][id];
-          this.onExit(code, workerPath, id);
-        });
-        this.workers[workerPath] = {
-          ...(this.workers[workerPath] && this.workers[workerPath]),
-          [id]: instance,
-        };
+    if (!this.workers[workerPath]) {
+      this.workers[workerPath] = {};
+    }
 
-        this._creating = false;
-        return Promise.resolve(instance);
-      });
+    instance.addEventListenerOnce('close', code => {
+      this.workers[workerPath][id] = null;
+      delete this.workers[workerPath][id];
+      this.onExit(code, workerPath, id);
+    });
+
+    this.workers[workerPath][id] = instance;
+
+    this._creating = false;
+    return instance;
   }
 }
 
