@@ -5,6 +5,10 @@ const { execSync } = require('child_process');
 
 let timer;
 
+const features = {
+  enableEmit: false,
+};
+
 function debounce(fn = () => {}, timeout = 0) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
@@ -169,19 +173,45 @@ const staticWorker = (event, callback = () => {}) => {
         isModified = false;
       }
     }
-
-    callback({
+    const response = {
       statusCode: isModified ? 200 : 304,
       headers: {
         'Content-Type': `${contentType}${charset ? `; charset=${charset}` : ''}`,
         'Cache-Control': 'public, max-age=0',
-        'Content-Length': bodyBuffer.length,
+        'Content-Length': bodyBuffer.byteLength,
         'ETag': currentEtag,
         ...(stats.mtime && { 'Last-Modified': lastModified.toUTCString() }),
       },
       body: bodyBuffer.toString('base64'),
       isBase64Encoded: true,
-    });
+      index: 0,
+    };
+
+    if (features.enableEmit) {
+      const reader = fs.createReadStream(fileName, {
+        encoding: 'utf-8',
+        emitClose: false,
+        autoClose: true,
+        // highWaterMark: 16,
+        start: 0,
+        end: Infinity,
+      });
+      reader.on('data', chunk => {
+        response.emit = true;
+        response.isBase64Encoded = false;
+        response.body = chunk.toString();
+        console.log('sending', chunk.length, 'bytes')
+        callback(response);
+      });
+      reader.on('end', () => {
+        response.isBase64Encoded = false;
+        response.emit = true;
+        response.body = null;
+        callback(response);
+      });
+    } else {
+      callback(response);
+    }
   } else {
     callback({
       statusCode: 404,

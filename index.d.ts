@@ -45,6 +45,7 @@ declare namespace Middleware {
     statusCode: number;
     headers?: { [key: string]: string };
     isBase64Encoded?: boolean;
+    emit?: boolean;
     body?: string;
   }
 

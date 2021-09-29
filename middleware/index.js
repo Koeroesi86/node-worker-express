@@ -215,6 +215,25 @@ const workerMiddleware = (options) => {
             response.end();
           }
 
+          if (responseEvent.type === WORKER_EVENT.RESPONSE_EMIT) {
+            worker.postMessage({
+              type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
+              requestId,
+            });
+            /** @type {ResponseEvent|WSFrameEvent} event */
+            const { event } = responseEvent;
+            const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
+
+            if (!response.headersSent) {
+              response.writeHead(event.statusCode, event.headers);
+            }
+            if (event.body !== null) {
+              response.write(Buffer.from(event.body, bufferEncoding).toString());
+            } else {
+              response.end();
+            }
+          }
+
           if (responseEvent.type === WORKER_EVENT.WS_MESSAGE_SEND) {
             request.socket.write(constructWsMessage(responseEvent.event.frame));
           }

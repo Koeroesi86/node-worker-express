@@ -15,10 +15,12 @@ function messageListener(message) {
     const callback = responseEvent => {
       /** @type {WorkerOutputEvent} e */
       const e = {
-        type: responseEvent.sendWsMessage ? WORKER_EVENT.WS_MESSAGE_SEND : WORKER_EVENT.RESPONSE,
+        type: WORKER_EVENT.RESPONSE,
         requestId: message.requestId,
         event: responseEvent,
-      }
+      };
+      if (responseEvent.sendWsMessage) e.type = WORKER_EVENT.WS_MESSAGE_SEND;
+      if (responseEvent.emit) e.type = WORKER_EVENT.RESPONSE_EMIT;
       process.send(e);
     };
     worker(message.event, callback);
