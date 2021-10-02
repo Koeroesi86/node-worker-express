@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
+const { Writable } = require('stream');
 
 let timer;
 
@@ -137,8 +138,7 @@ function getCharset(body, fileName) {
     return 'iso-8859-1';
 
   try {
-    const out = execSync(`file -b --mime-encoding ${fileName}`).toString('utf8').trim();
-    return out;
+    return execSync(`file -b --mime-encoding ${fileName}`).toString('utf8').trim();
   } catch (e) {
     //
   }
@@ -182,33 +182,42 @@ const staticWorker = (event, callback = () => {}) => {
         'ETag': currentEtag,
         ...(stats.mtime && { 'Last-Modified': lastModified.toUTCString() }),
       },
-      body: bodyBuffer.toString('base64'),
+      body: isModified ? bodyBuffer.toString('base64') : '',
       isBase64Encoded: true,
       index: 0,
     };
 
-    if (features.enableEmit) {
-      const reader = fs.createReadStream(fileName, {
+    if (features.enableEmit && isModified) {
+      const writer = new Writable({
+        /**
+         * @param {Buffer} chunk
+         * @param {string} encoding
+         * @param {Function} next
+         */
+        write(chunk, encoding, next) {
+          response.emit = true;
+          response.isBase64Encoded = true;
+          response.body = chunk.toString('base64');
+          console.log('sending', chunk.length, 'bytes')
+          callback(response);
+          next();
+        },
+        destroy() {
+          response.isBase64Encoded = false;
+          response.emit = true;
+          response.body = null;
+          callback(response);
+        },
+      });
+
+      fs.createReadStream(fileName, {
         encoding: 'utf-8',
         emitClose: false,
         autoClose: true,
         // highWaterMark: 16,
         start: 0,
         end: Infinity,
-      });
-      reader.on('data', chunk => {
-        response.emit = true;
-        response.isBase64Encoded = false;
-        response.body = chunk.toString();
-        console.log('sending', chunk.length, 'bytes')
-        callback(response);
-      });
-      reader.on('end', () => {
-        response.isBase64Encoded = false;
-        response.emit = true;
-        response.body = null;
-        callback(response);
-      });
+      }).pipe(writer);
     } else {
       callback(response);
     }
