@@ -184,7 +184,6 @@ const staticWorker = (event, callback = () => {}) => {
       },
       body: isModified ? bodyBuffer.toString('base64') : '',
       isBase64Encoded: true,
-      index: 0,
     };
 
     if (features.enableEmit && isModified) {
@@ -198,7 +197,7 @@ const staticWorker = (event, callback = () => {}) => {
           response.emit = true;
           response.isBase64Encoded = true;
           response.body = chunk.toString('base64');
-          console.log('sending', chunk.length, 'bytes')
+          // console.log('sending', chunk.length, 'bytes')
           callback(response);
           next();
         },
@@ -211,9 +210,10 @@ const staticWorker = (event, callback = () => {}) => {
       });
 
       fs.createReadStream(fileName, {
-        encoding: 'utf-8',
+        // encoding: 'binary',
+        // encoding: 'utf-8',
         emitClose: false,
-        autoClose: true,
+        autoClose: false,
         // highWaterMark: 16,
         start: 0,
         end: Infinity,
