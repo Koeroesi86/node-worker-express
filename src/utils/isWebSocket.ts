@@ -1,8 +1,6 @@
-/**
- * @param {module:http~IncomingMessage} request
- * @returns {boolean}
- */
-const isWebSocket = request => {
+import { Request } from 'express';
+
+const isWebSocket = (request: Request) => {
   if (request.method !== 'GET') return false;
 
   const connection = request.headers.connection || '';
@@ -13,4 +11,4 @@ const isWebSocket = request => {
     upgrade.toLowerCase() === 'websocket';
 };
 
-module.exports = isWebSocket;
+export default isWebSocket;

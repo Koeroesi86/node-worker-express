@@ -1,14 +1,31 @@
-const { v4: uuid } = require('uuid');
-const path = require('path');
-const fs = require('fs');
-const url = require('url');
-const { WORKER_EVENT } = require('../constants');
-const WorkerPool = require('../utils/workerPool');
-const isWebSocket = require('../utils/isWebSocket');
-const parseWsMessage = require('../utils/parseWsMessage');
-const constructWsMessage = require('../utils/constructWsMessage');
-const getClientIp = require('../utils/getClientIp');
-const createBodyParser = require('./bodyParser');
+import { v4 as uuid } from 'uuid';
+import path from 'path';
+import fs from 'fs';
+import url from 'url';
+import { WORKER_EVENT } from '../constants';
+import WorkerPool from '../utils/workerPool';
+import isWebSocket from '../utils/isWebSocket';
+import parseWsMessage from '../utils/parseWsMessage';
+import constructWsMessage from '../utils/constructWsMessage';
+import getClientIp from '../utils/getClientIp';
+import createBodyParser from './bodyParser';
+import { RequestHandler } from 'express';
+
+type MiddlewareOptions = {
+  root: string,
+  limit?: number,
+  limitPerPath?: number|((path: string) => number),
+  limitRequestBody?: number,
+  limitRequestTimeout?: number,
+  idleCheckTimeout?: number,
+  onStdout?: (data: Buffer) => void,
+  onStderr?: (data: Buffer) => void,
+  onExit?: void,
+  index?: string[],
+  env?: object,
+  staticWorker?: string,
+  cwd?: string,
+}
 
 const ForbiddenPaths = [
   '..'
@@ -39,16 +56,11 @@ const DefaultOptions = {
   },
   index: [],
   env: {},
-  staticWorker: path.resolve(__dirname, '../examples/staticWorker.js'),
+  staticWorker: path.resolve(__dirname, './staticWorker.js'),
   cwd: process.cwd(),
 };
 
-/**
- * @namespace Middleware
- * @param {MiddlewareOptions} [options]
- * @returns {RequestHandler}
- */
-const workerMiddleware = (options) => {
+const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
   const config = {
     ...DefaultOptions,
     ...(options && options),
@@ -62,7 +74,7 @@ const workerMiddleware = (options) => {
     onExit: config.onExit,
     idleCheckTimeout: config.idleCheckTimeout,
   });
-  const bodyParser = createBodyParser({ limitRequestBody: config.limitRequestBody });
+  const bodyParser = createBodyParser({ limitRequestBody: config.limitRequestBody, shouldError: true });
   const aliasCache = {};
   const workerCache = {};
 
@@ -71,7 +83,6 @@ const workerMiddleware = (options) => {
       query: queryStringParameters,
       pathname
     } = url.parse(request.url, true);
-    request.pathFragments = pathname.split(/\//gi).filter(Boolean);
 
     try {
       let isWorker = false;
@@ -79,8 +90,8 @@ const workerMiddleware = (options) => {
       let currentPathFragments = pathFragments.slice(0);
       let pathExists = false;
 
-      await new Promise((resolve, reject) => {
-        if (request.pathFragments.find(p => ForbiddenPaths.includes(p))) {
+      await new Promise<void>((resolve, reject) => {
+        if (pathFragments.find(p => ForbiddenPaths.includes(p))) {
           config.onForbiddenPath(request, response);
           reject();
         }
@@ -285,4 +296,4 @@ const workerMiddleware = (options) => {
   };
 };
 
-module.exports = workerMiddleware;
+export default workerMiddleware;

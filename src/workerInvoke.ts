@@ -1,4 +1,4 @@
-const { WORKER_EVENT } = require('../constants');
+import { WORKER_EVENT } from './constants';
 
 /** @namespace Middleware */
 

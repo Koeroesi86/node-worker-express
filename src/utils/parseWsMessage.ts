@@ -1,9 +1,5 @@
-/**
- * TODO: improve
- * @param {Buffer} data
- * @returns {string}
- */
-const parseWsMessage = data => {
+// TODO: improve
+const parseWsMessage = (data: Buffer) => {
   const dl = data[1] & 127;
   let ifm = 2;
   if (dl === 126) {
@@ -22,4 +18,4 @@ const parseWsMessage = data => {
   return output;
 };
 
-module.exports = parseWsMessage;
+export default parseWsMessage;
