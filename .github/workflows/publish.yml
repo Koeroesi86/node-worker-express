@@ -1,0 +1,37 @@
+name: Publish
+
+on: 
+  push:
+    branches:    
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'yarn'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Persist cache
+        uses: actions/cache@v3
+        id: local-dot-cache
+        with:
+          path: .cache
+          key: ${{ runner.os }}-local-dot-cache-${{ hashFiles('**/yarn.lock') }}
+      - name: Setup
+        run: yarn install --frozen-lockfile
+      # - name: Lint
+      #   run: yarn lint
+      # - name: Test
+      #   run: yarn test
+      - name: Package version
+        run: yarn generate-version
+      - name: Package bundle
+        run: yarn build
+      - name: Publish package
+        run: npm publish --dry-run
+        # env:
+        #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
