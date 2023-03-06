@@ -11,7 +11,7 @@ if (!GITHUB_RUN_ID) {
 }
 
 const now = new Date();
-const version = `${`${now.getFullYear()}`.substring(2)}.${`${now.getMonth() + 1}`.padStart(2, '0')}.${GITHUB_RUN_ID}-${GITHUB_REF_NAME.replace(/\/g, '-'/)}`;
+const version = `${`${now.getFullYear()}`.substring(2)}.${`${now.getMonth() + 1}`.padStart(2, '0')}.${GITHUB_RUN_ID}-${GITHUB_REF_NAME.replace(/\//g, '-')}`;
 
 execSync(`yarn version --no-git-tag-version --new-version "v${version}"`, { shell: true });
 
