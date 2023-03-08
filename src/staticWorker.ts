@@ -1,8 +1,9 @@
-const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
-const { execSync } = require('child_process');
-const { Writable } = require('stream');
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import { execSync } from 'child_process';
+import { Writable } from 'stream';
+import { InvokableWorker, ResponseEvent } from './types';
 
 let timer;
 
@@ -146,7 +147,7 @@ function getCharset(body, fileName) {
   return false;
 }
 
-const staticWorker = (event, callback = () => {}) => {
+const staticWorker: InvokableWorker = (event, callback = () => {}) => {
   debounce(() => {
     console.log('Exiting static worker.');
     process.exit(0);
@@ -173,12 +174,12 @@ const staticWorker = (event, callback = () => {}) => {
         isModified = false;
       }
     }
-    const response = {
+    const response: ResponseEvent = {
       statusCode: isModified ? 200 : 304,
       headers: {
         'Content-Type': `${contentType}${charset ? `; charset=${charset}` : ''}`,
         'Cache-Control': 'public, max-age=0',
-        'Content-Length': bodyBuffer.byteLength,
+        'Content-Length': String(bodyBuffer.byteLength),
         'ETag': currentEtag,
         ...(stats.mtime && { 'Last-Modified': lastModified.toUTCString() }),
       },
@@ -234,4 +235,4 @@ const staticWorker = (event, callback = () => {}) => {
   }
 };
 
-module.exports = staticWorker;
+export default staticWorker;

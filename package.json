@@ -2,7 +2,7 @@
   "name": "@koeroesi86/node-worker-express",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/build",
   "author": {
     "name": "Krisztian Korosi",
     "url": "https://github.com/Koeroesi86"
@@ -12,6 +12,7 @@
     "access": "public"
   },
   "scripts": {
+    "build": "rm -rf ./dist && rollup -c rollup.config.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon examples/server.js",
     "generate-version": "node scripts/version.js"
@@ -22,9 +23,13 @@
     "uuid": "^8.3.2"
   },
   "devDependencies": {
+    "@rollup/plugin-typescript": "^11.0.0",
     "@types/express": "^4.17.13",
     "@types/node": "^17.0.21",
     "express": "^4.17.3",
-    "nodemon": "^2.0.15"
+    "nodemon": "^2.0.15",
+    "rollup": "^3.18.0",
+    "tslib": "^2.5.0",
+    "typescript": "^4.9.5"
   }
 }

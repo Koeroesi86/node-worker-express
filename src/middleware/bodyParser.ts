@@ -33,4 +33,4 @@ const bodyParser = (config = { limitRequestBody: 1000000, shouldError: true }) =
   });
 };
 
-module.exports = bodyParser;
+export default bodyParser;

@@ -1,9 +1,5 @@
-/**
- * TODO: improve
- * @param {String} text
- * @returns {Buffer}
- */
-const constructWsMessage = text => {
+// TODO: improve
+const constructWsMessage = (text: string) => {
   const jsonByteLength = Buffer.byteLength(text);
   // Note: we're not supporting > 65535 byte payloads at this stage
   const lengthByteCount = jsonByteLength < 126 ? 0 : 2;
@@ -24,4 +20,4 @@ const constructWsMessage = text => {
   return buffer;
 };
 
-module.exports = constructWsMessage;
+export default constructWsMessage;

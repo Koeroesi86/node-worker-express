@@ -1,8 +1,6 @@
-/**
- * @param {module:http~IncomingMessage} request
- * @returns {string}
- */
-const getClientIp = request => {
+import { Request } from 'express';
+
+const getClientIp = (request: Request) => {
   if (request.headers['x-client-ip']) {
     return request.headers['x-client-ip'];
   }
@@ -43,29 +41,11 @@ const getClientIp = request => {
     return request.headers.forwarded;
   }
 
-  if (request.connection) {
-    if (request.connection.remoteAddress) {
-      return request.connection.remoteAddress;
-    }
-
-    if (request.connection.socket && request.connection.socket.remoteAddress) {
-      return request.connection.socket.remoteAddress;
-    }
-  }
-
   if (request.socket && request.socket.remoteAddress) {
     return request.socket.remoteAddress;
-  }
-
-  if (request.info && request.info.remoteAddress) {
-    return request.info.remoteAddress;
-  }
-
-  if (request.requestContext && request.requestContext.identity && request.requestContext.identity.sourceIp) {
-    return request.requestContext.identity.sourceIp;
   }
 
   return '';
 };
 
-module.exports = getClientIp;
+export default getClientIp;

@@ -1,6 +1,6 @@
-const { v4: uuid } = require('uuid');
-const path = require('path');
-const Worker = require('@koeroesi86/node-worker');
+import { v4 as uuid } from 'uuid';
+import path from 'path';
+import Worker from '@koeroesi86/node-worker';
 
 /** @var {WorkerPool[]} */
 const pools = [];
@@ -14,11 +14,17 @@ const createWorkerCommand = workerPath => {
   switch (ext) {
     case '.js':
     default:
-      return `node --expose-gc ${path.resolve(__dirname, '../middleware/workerInvoke.js')} ${workerPath}`;
+      return `node --expose-gc ${path.resolve(__dirname, './workerInvoke.js')} ${workerPath}`;
   }
 };
 
 class WorkerPool {
+  protected readonly overallLimit: number;
+  protected readonly idleCheckTimeout: number;
+  protected readonly onExit: (code: number, workerPath: string, id: string) => void;
+  protected readonly workers: {};
+  private _creating: boolean;
+
   constructor({
                 overallLimit = 0,
                 idleCheckTimeout = 5,
@@ -98,4 +104,4 @@ class WorkerPool {
   }
 }
 
-module.exports = WorkerPool;
+export default WorkerPool;
