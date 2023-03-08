@@ -1,4 +1,4 @@
-# Node Worker Express [![Build Status](https://app.travis-ci.com/Koeroesi86/node-worker-express.svg?branch=master)](https://app.travis-ci.com/Koeroesi86/node-worker-express)
+# Node Worker Express [![Publish](https://github.com/Koeroesi86/node-worker-express/actions/workflows/publish.yml/badge.svg)](https://github.com/Koeroesi86/node-worker-express/actions/workflows/publish.yml)
 
 Express JS library for [@koeroesi86/node-worker](https://www.npmjs.com/package/@koeroesi86/node-worker)
 
