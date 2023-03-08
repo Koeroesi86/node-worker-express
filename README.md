@@ -19,4 +19,4 @@ yarn install
 yarn start
 ```
 
-For all options see [types](./index.d.ts).
+For all options see [types](https://github.com/Koeroesi86/node-worker-express/blob/main/src/middleware/index.ts).
