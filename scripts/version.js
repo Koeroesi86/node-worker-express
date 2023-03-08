@@ -1,6 +1,6 @@
 const { execSync } = require('child_process');
 
-const { GITHUB_RUN_ID, GITHUB_REF_NAME, GITHUB_REF_TYPE } = process.env;
+const { GITHUB_RUN_ID, GITHUB_REF_NAME } = process.env;
 
 if (!GITHUB_REF_NAME) {
   throw new Error(`GITHUB_REF_NAME: ${GITHUB_REF_NAME}`);
