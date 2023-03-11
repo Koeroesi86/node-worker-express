@@ -7,3 +7,4 @@ scripts
 .idea
 nodemon.json
 tsconfig.json
+rollup.config.js
