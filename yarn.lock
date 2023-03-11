@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@koeroesi86/node-worker@^23.3.4335417774-master":
-  version "23.3.4335417774-master"
-  resolved "https://registry.yarnpkg.com/@koeroesi86/node-worker/-/node-worker-23.3.4335417774-master.tgz#72049b3f6c2f1805105040196c3275ebea1fa384"
-  integrity sha512-a4yzPznEIkp5J8pOVBdSd7h+5Cf2MhdGsziWTH0kNx6Qh1rN1ltIDHGzgRcP49aamLvl9V0WTd60MiKkxxBHPg==
+"@koeroesi86/node-worker@^23.3.4393102036-main":
+  version "23.3.4393102036-main"
+  resolved "https://registry.yarnpkg.com/@koeroesi86/node-worker/-/node-worker-23.3.4393102036-main.tgz#a78c297a7ccf563245655288e7dd4bf42489a299"
+  integrity sha512-lZTY320jx413DiIYTFuy6ytGx0DBzd3jmT6gFfWrKrK58GmUPveVOUBT1qumOVVQKbtx6zks3vWX3gBzz9DRxg==
 
 "@rollup/plugin-typescript@^11.0.0":
   version "11.0.0"
@@ -81,10 +81,10 @@
   resolved "https://registry.yarnpkg.com/@types/node/-/node-13.13.2.tgz#160d82623610db590a64e8ca81784e11117e5a54"
   integrity sha512-LB2R1Oyhpg8gu4SON/mfforE525+Hi/M1ineICEDftqNVTyFg1aRIeGuTvXAoWHc4nbrFncWtJgMmoyRvuGh7A==
 
-"@types/node@^18.14.6":
-  version "18.14.6"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.14.6.tgz#ae1973dd2b1eeb1825695bb11ebfb746d27e3e93"
-  integrity sha512-93+VvleD3mXwlLI/xASjw0FzKcwzl3OdTCzm1LaRfqgS21gfFtK3zDXM5Op9TeeMsJVOaJ2VRDpT9q4Y3d0AvA==
+"@types/node@^18.15.0":
+  version "18.15.0"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.15.0.tgz#286a65e3fdffd691e170541e6ecb0410b16a38be"
+  integrity sha512-z6nr0TTEOBGkzLGmbypWOGnpSpSIBorEhC4L+4HeQ2iezKCi4f77kyslRwvHeNitymGQ+oFyIWGP96l/DPSV9w==
 
 "@types/qs@*":
   version "6.9.1"
@@ -638,10 +638,10 @@ resolve@^1.22.1:
     path-parse "^1.0.7"
     supports-preserve-symlinks-flag "^1.0.0"
 
-rollup@^3.18.0:
-  version "3.18.0"
-  resolved "https://registry.yarnpkg.com/rollup/-/rollup-3.18.0.tgz#2354ba63ba66d6a09c652c3ea0dbcd9dad72bbde"
-  integrity sha512-J8C6VfEBjkvYPESMQYxKHxNOh4A5a3FlP+0BETGo34HEcE4eTlgCrO2+eWzlu2a/sHs2QUkZco+wscH7jhhgWg==
+rollup@^3.19.1:
+  version "3.19.1"
+  resolved "https://registry.yarnpkg.com/rollup/-/rollup-3.19.1.tgz#2b3a31ac1ff9f3afab2e523fa687fef5b0ee20fc"
+  integrity sha512-lAbrdN7neYCg/8WaoWn/ckzCtz+jr70GFfYdlf50OF7387HTg+wiuiqJRFYawwSPpqfqDNYqK7smY/ks2iAudg==
   optionalDependencies:
     fsevents "~2.3.2"
 

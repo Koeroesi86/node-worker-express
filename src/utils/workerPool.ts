@@ -91,7 +91,7 @@ class WorkerPool {
       this.workers[workerPath] = {};
     }
 
-    instance.addEventListenerOnce('close', code => {
+    instance.addEventListenerOnce('close', (code: number) => {
       this.workers[workerPath][id] = null;
       delete this.workers[workerPath][id];
       this.onExit(code, workerPath, id);
