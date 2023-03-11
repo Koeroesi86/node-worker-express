@@ -22,8 +22,8 @@ jobs:
           key: ${{ runner.os }}-local-dot-cache-${{ hashFiles('**/yarn.lock') }}
       - name: Setup
         run: yarn install --frozen-lockfile
-      # - name: Lint
-      #   run: yarn lint
+      - name: Lint
+        run: yarn lint
       # - name: Test
       #   run: yarn test
       - name: Package version
