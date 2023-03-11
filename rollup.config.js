@@ -1,4 +1,5 @@
 const typescript = require('@rollup/plugin-typescript');
+const packageJson = require('./package.json');
 
 /** @type {import('rollup').RollupOptions} */
 module.exports = {
@@ -8,5 +9,6 @@ module.exports = {
     format: 'cjs',
     sourcemap: true,
   },
-  plugins: [typescript()]
+  external: [...Object.keys(packageJson.dependencies || {})],
+  plugins: [typescript()],
 };

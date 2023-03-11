@@ -10,7 +10,7 @@ const parseWsMessage = (data: Buffer) => {
   let i = ifm + 4;
   const masks = data.slice(ifm, i);
   let index = 0;
-  let output = "";
+  let output = '';
   const l = data.length;
   while (i < l) {
     output += String.fromCharCode(data[i++] ^ masks[index++ % 4]);

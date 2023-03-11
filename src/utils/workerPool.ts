@@ -2,14 +2,13 @@ import { v4 as uuid } from 'uuid';
 import path from 'path';
 import Worker from '@koeroesi86/node-worker';
 
-/** @var {WorkerPool[]} */
-const pools = [];
+const pools: WorkerPool[] = [];
 
 process.once('exit', () => {
-  pools.forEach(pool => pool.onClose());
+  pools.forEach((pool) => pool.onClose());
 });
 
-const createWorkerCommand = workerPath => {
+const createWorkerCommand = (workerPath) => {
   const ext = path.extname(workerPath);
   switch (ext) {
     case '.js':
@@ -25,12 +24,7 @@ class WorkerPool {
   protected readonly workers: {};
   private _creating: boolean;
 
-  constructor({
-                overallLimit = 0,
-                idleCheckTimeout = 5,
-                onExit = () => {
-                }
-              }) {
+  constructor({ overallLimit = 0, idleCheckTimeout = 5, onExit = () => {} }) {
     this.overallLimit = overallLimit;
     this.idleCheckTimeout = idleCheckTimeout;
     this.onExit = onExit;
@@ -46,18 +40,20 @@ class WorkerPool {
   }
 
   onClose() {
-    Object.keys(this.workers).forEach(workerPath => {
+    Object.keys(this.workers).forEach((workerPath) => {
       const current = this.workers[workerPath];
-      Object.keys(current).forEach(id => {
+      Object.keys(current).forEach((id) => {
         current[id].terminate();
       });
     });
   }
 
   getNonBusyId(workerPath) {
-    return this.workers[workerPath] ? Object.keys(this.workers[workerPath] || {}).find(id => {
-      return !this.workers[workerPath][id].busy;
-    }) : undefined;
+    return this.workers[workerPath]
+      ? Object.keys(this.workers[workerPath] || {}).find((id) => {
+          return !this.workers[workerPath][id].busy;
+        })
+      : undefined;
   }
 
   getWorkerCountForPath(p) {
@@ -69,8 +65,10 @@ class WorkerPool {
   }
 
   isBeyondLimit(workerPath, limit) {
-    return (this.workers[workerPath] && limit > 0 && this.getWorkerCountForPath(workerPath) >= limit)
-      || (this.overallLimit > 0 && this.getWorkerCount() >= this.overallLimit);
+    return (
+      (this.workers[workerPath] && limit > 0 && this.getWorkerCountForPath(workerPath) >= limit) ||
+      (this.overallLimit > 0 && this.getWorkerCount() >= this.overallLimit)
+    );
   }
 
   async getWorker(workerPath, options = {}, limit = 0) {
@@ -79,7 +77,7 @@ class WorkerPool {
     if (nonBusyId !== undefined) {
       return this.workers[workerPath][nonBusyId];
     } else if (this.isBeyondLimit(workerPath, limit) || this._creating) {
-      await new Promise(r => setTimeout(r, this.idleCheckTimeout));
+      await new Promise((r) => setTimeout(r, this.idleCheckTimeout));
       return this.getWorker(workerPath, options, limit);
     }
 

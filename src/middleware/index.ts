@@ -10,26 +10,25 @@ import constructWsMessage from '../utils/constructWsMessage';
 import getClientIp from '../utils/getClientIp';
 import createBodyParser from './bodyParser';
 import { RequestHandler } from 'express';
+import { RequestEvent, WorkerOutputEvent } from 'src/types';
 
 type MiddlewareOptions = {
-  root: string,
-  limit?: number,
-  limitPerPath?: number|((path: string) => number),
-  limitRequestBody?: number,
-  limitRequestTimeout?: number,
-  idleCheckTimeout?: number,
-  onStdout?: (data: Buffer) => void,
-  onStderr?: (data: Buffer) => void,
-  onExit?: void,
-  index?: string[],
-  env?: object,
-  staticWorker?: string,
-  cwd?: string,
-}
+  root: string;
+  limit?: number;
+  limitPerPath?: number | ((path: string) => number);
+  limitRequestBody?: number;
+  limitRequestTimeout?: number;
+  idleCheckTimeout?: number;
+  onStdout?: (data: Buffer) => void;
+  onStderr?: (data: Buffer) => void;
+  onExit?: void;
+  index?: string[];
+  env?: object;
+  staticWorker?: string;
+  cwd?: string;
+};
 
-const ForbiddenPaths = [
-  '..'
-];
+const ForbiddenPaths = ['..'];
 
 const Protocols = {
   http: 'HTTP',
@@ -43,12 +42,9 @@ const DefaultOptions = {
   limitRequestBody: 1000000,
   limitRequestTimeout: 5000,
   idleCheckTimeout: 5,
-  onStdout: () => {
-  },
-  onStderr: () => {
-  },
-  onExit: () => {
-  },
+  onStdout: () => {},
+  onStderr: () => {},
+  onExit: () => {},
   onForbiddenPath: (request, response) => {
     response.writeHead(500, { 'Content-Type': 'text/plain' });
     response.end();
@@ -79,10 +75,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
   const workerCache = {};
 
   return async (request, response, next) => {
-    const {
-      query: queryStringParameters,
-      pathname
-    } = url.parse(request.url, true);
+    const { query: queryStringParameters, pathname } = url.parse(request.url, true);
 
     try {
       let isWorker = false;
@@ -91,17 +84,14 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
       let pathExists = false;
 
       await new Promise<void>((resolve, reject) => {
-        if (pathFragments.find(p => ForbiddenPaths.includes(p))) {
+        if (pathFragments.find((p) => ForbiddenPaths.includes(p))) {
           config.onForbiddenPath(request, response);
           reject();
         }
         resolve();
       });
 
-      await Promise.race([
-        new Promise((res, rej) => setTimeout(rej, config.limitRequestTimeout)),
-        new Promise(res => bodyParser(request, response, res)),
-      ]);
+      await Promise.race([new Promise((res, rej) => setTimeout(rej, config.limitRequestTimeout)), new Promise((res) => bodyParser(request, response, res))]);
       let indexPath;
 
       if (aliasCache[pathname] && fs.existsSync(aliasCache[pathname])) {
@@ -111,7 +101,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
         isWorker = true;
         indexPath = workerCache[pathname];
       } else {
-        indexPath = path.join(rootPath, ...currentPathFragments)
+        indexPath = path.join(rootPath, ...currentPathFragments);
 
         for (let i = currentPathFragments.length; i >= 0 && !pathExists; i--) {
           if (pathExists) continue;
@@ -123,7 +113,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
 
           if (pathExists && currentStats.isDirectory()) {
             // index fallback
-            pathExists = !!config.index.find(indexFile => {
+            pathExists = !!config.index.find((indexFile) => {
               const checkIndexFilePath = path.join(currentPath, indexFile);
               if (fs.existsSync(checkIndexFilePath)) {
                 isWorker = true;
@@ -150,40 +140,41 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
         }
       }
 
-      /** @type {RequestEvent} */
-      const event = {
+      const event: RequestEvent = {
         httpMethod: request.method.toUpperCase(),
         protocol: isWebSocket(request) ? Protocols.websocket : Protocols.http,
         path: pathname,
         pathFragments: pathFragments,
         queryStringParameters: JSON.parse(JSON.stringify(queryStringParameters)),
-        headers: request.headers,
+        headers: request.headers as Record<string, string>,
         remoteAddress: getClientIp(request),
         body: `${request.body}`,
         rootPath: rootPath,
       };
 
-      const worker = isWorker ? await workerPool.getWorker(
-        indexPath,
-        {
-          stdio: [ 'pipe', 'pipe', 'pipe', 'ipc' ],
-          env: { ...process.env, ...config.env },
-          cwd: config.cwd,
-        },
-        typeof config.limitPerPath === "function" ? config.limitPerPath(indexPath) : config.limitPerPath
-      ) : await workerPool.getWorker(
-        config.staticWorker,
-        {
-          cwd: process.cwd(),
-          stdio: [ 'pipe', 'pipe', 'pipe', 'ipc' ],
-        },
-        1
-      );
+      const worker = isWorker
+        ? await workerPool.getWorker(
+            indexPath,
+            {
+              stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+              env: { ...process.env, ...config.env },
+              cwd: config.cwd,
+            },
+            typeof config.limitPerPath === 'function' ? config.limitPerPath(indexPath) : config.limitPerPath
+          )
+        : await workerPool.getWorker(
+            config.staticWorker,
+            {
+              cwd: process.cwd(),
+              stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+            },
+            1
+          );
 
       const requestId = uuid();
 
       let firstReceived = false;
-      const requestSocketListener = data => {
+      const requestSocketListener = (data) => {
         const frame = parseWsMessage(data);
 
         // TODO: filter open frame better
@@ -197,7 +188,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
         worker.postMessage({
           type: WORKER_EVENT.WS_MESSAGE_RECEIVE,
           requestId,
-          event: { ...event, frame }
+          event: { ...event, frame },
         });
       };
       if (event.protocol === Protocols.websocket) {
@@ -210,14 +201,13 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
       worker.instance.stderr.off('data', config.onStderr);
       worker.instance.stderr.on('data', config.onStderr);
 
-      const messageListener = responseEvent => {
+      const messageListener = (responseEvent: WorkerOutputEvent) => {
         if (responseEvent.requestId === requestId) {
           if (responseEvent.type === WORKER_EVENT.RESPONSE) {
             worker.postMessage({
               type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
               requestId,
             });
-            /** @type {ResponseEvent|WSFrameEvent} event */
             const { event } = responseEvent;
             const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
 
@@ -231,7 +221,6 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
               type: WORKER_EVENT.RESPONSE_ACKNOWLEDGE,
               requestId,
             });
-            /** @type {ResponseEvent|WSFrameEvent} event */
             const { event } = responseEvent;
             const bufferEncoding = event.isBase64Encoded ? 'base64' : 'utf8';
 
@@ -259,7 +248,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
         worker.postMessage({
           type: WORKER_EVENT.WS_CONNECTION_CLOSE,
           requestId,
-          event
+          event,
         });
         if (request.socket && request.socket.off) request.socket.off('close', requestCloseListener);
         worker.removeEventListener('message', messageListener);
@@ -288,7 +277,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
       request.on('aborted', cleanupConnection);
       if (event.protocol === Protocols.http) {
         request.on('close', cleanupConnection);
-        response.on('finish', cleanupConnection)
+        response.on('finish', cleanupConnection);
       }
     } catch (e) {
       next(e);
