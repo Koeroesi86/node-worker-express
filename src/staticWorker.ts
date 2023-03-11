@@ -21,13 +21,13 @@ function debounce(fn = () => {}, timeout = 0) {
 
 function getContentType(extension = '') {
   const contentTypes = {
-    '.aac':	'audio/aac',
-    '.abw':	'application/x-abiword',
-    '.arc':	'application/x-freearc',
-    '.avi':	'video/x-msvideo',
-    '.azw':	'application/vnd.amazon.ebook',
-    '.bin':	'application/octet-stream',
-    '.bmp':	'image/bmp',
+    '.aac': 'audio/aac',
+    '.abw': 'application/x-abiword',
+    '.arc': 'application/x-freearc',
+    '.avi': 'video/x-msvideo',
+    '.azw': 'application/vnd.amazon.ebook',
+    '.bin': 'application/octet-stream',
+    '.bmp': 'image/bmp',
     '.bz': 'application/x-bzip',
     '.bz2': 'application/x-bzip2',
     '.csh': 'application/x-csh',
@@ -95,7 +95,7 @@ function getContentType(extension = '') {
     '.3gp': 'video/3gpp',
     '.3g2': 'video/3gpp2',
     '.7z': 'application/x-7z-compressed',
-};
+  };
 
   return contentTypes[extension] || contentTypes['.txt'];
 }
@@ -107,36 +107,21 @@ function etag(body) {
   }
 
   // compute hash of entity
-  const hash = crypto
-    .createHash('sha1')
-    .update(body, 'utf8')
-    .digest('base64')
-    .substring(0, 27);
+  const hash = crypto.createHash('sha1').update(body, 'utf8').digest('base64').substring(0, 27);
 
   // compute length of entity
-  const len = typeof body === 'string'
-    ? Buffer.byteLength(body, 'utf8')
-    : body.length;
+  const len = typeof body === 'string' ? Buffer.byteLength(body, 'utf8') : body.length;
 
-  return `"${len.toString(16)}-${hash}"`
+  return `"${len.toString(16)}-${hash}"`;
 }
 
-/**
- * TODO: implement
- * @param {Buffer} body
- * @param {string} fileName
- * @returns {boolean|string}
- */
-function getCharset(body, fileName) {
+// TODO: implement
+function getCharset(body: Buffer, fileName: string): boolean | string {
   // Byte order mark
-  if (body[0] === 0xEF && body[1] === 0xBB && body[2] === 0xBF)
-    return 'utf8';
-  if (body[0] === 0xFE && body[1] === 0xFF)
-    return 'utf16be';
-  if (body[0] === 0xFF && body[1] === 0xFE)
-    return 'utf16le';
-  if (body.indexOf('ï»¿') === 0)
-    return 'iso-8859-1';
+  if (body[0] === 0xef && body[1] === 0xbb && body[2] === 0xbf) return 'utf8';
+  if (body[0] === 0xfe && body[1] === 0xff) return 'utf16be';
+  if (body[0] === 0xff && body[1] === 0xfe) return 'utf16le';
+  if (body.indexOf('ï»¿') === 0) return 'iso-8859-1';
 
   try {
     return execSync(`file -b --mime-encoding ${fileName}`).toString('utf8').trim();
@@ -180,7 +165,7 @@ const staticWorker: InvokableWorker = (event, callback = () => {}) => {
         'Content-Type': `${contentType}${charset ? `; charset=${charset}` : ''}`,
         'Cache-Control': 'public, max-age=0',
         'Content-Length': String(bodyBuffer.byteLength),
-        'ETag': currentEtag,
+        ETag: currentEtag,
         ...(stats.mtime && { 'Last-Modified': lastModified.toUTCString() }),
       },
       body: isModified ? bodyBuffer.toString('base64') : '',
@@ -189,12 +174,7 @@ const staticWorker: InvokableWorker = (event, callback = () => {}) => {
 
     if (features.enableEmit && isModified) {
       const writer = new Writable({
-        /**
-         * @param {Buffer} chunk
-         * @param {string} encoding
-         * @param {Function} next
-         */
-        write(chunk, encoding, next) {
+        write(chunk: Buffer, encoding: string, next: () => unknown) {
           response.emit = true;
           response.isBase64Encoded = true;
           response.body = chunk.toString('base64');
@@ -229,7 +209,7 @@ const staticWorker: InvokableWorker = (event, callback = () => {}) => {
         'Content-Type': 'text/plain',
         'Cache-Control': 'public, max-age=0',
       },
-      body:`${fileName} does not exist`,
+      body: `${fileName} does not exist`,
       isBase64Encoded: false,
     });
   }

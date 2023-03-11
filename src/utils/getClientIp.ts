@@ -1,40 +1,42 @@
 import { Request } from 'express';
 
-const getClientIp = (request: Request) => {
+const headerToString = (header: string | string[]) => (typeof header === 'string' ? header : header[0]);
+
+const getClientIp = (request: Request): string => {
   if (request.headers['x-client-ip']) {
-    return request.headers['x-client-ip'];
+    return headerToString(request.headers['x-client-ip']);
   }
 
   if (request.headers['x-forwarded-for']) {
-    return request.headers['x-forwarded-for'];
+    return headerToString(request.headers['x-forwarded-for']);
   }
 
   if (request.headers['cf-connecting-ip']) {
-    return request.headers['cf-connecting-ip'];
+    return headerToString(request.headers['cf-connecting-ip']);
   }
 
   if (request.headers['fastly-client-ip']) {
-    return request.headers['fastly-client-ip'];
+    return headerToString(request.headers['fastly-client-ip']);
   }
 
   if (request.headers['true-client-ip']) {
-    return request.headers['true-client-ip'];
+    return headerToString(request.headers['true-client-ip']);
   }
 
   if (request.headers['x-real-ip']) {
-    return request.headers['x-real-ip'];
+    return headerToString(request.headers['x-real-ip']);
   }
 
   if (request.headers['x-cluster-client-ip']) {
-    return request.headers['x-cluster-client-ip'];
+    return headerToString(request.headers['x-cluster-client-ip']);
   }
 
   if (request.headers['x-forwarded']) {
-    return request.headers['x-forwarded'];
+    return headerToString(request.headers['x-forwarded']);
   }
 
   if (request.headers['forwarded-for']) {
-    return request.headers['forwarded-for'];
+    return headerToString(request.headers['forwarded-for']);
   }
 
   if (request.headers.forwarded) {

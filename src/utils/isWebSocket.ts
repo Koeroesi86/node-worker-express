@@ -6,9 +6,7 @@ const isWebSocket = (request: Request) => {
   const connection = request.headers.connection || '';
   const upgrade = request.headers.upgrade || '';
 
-  return request.method === 'GET' &&
-    connection.toLowerCase().split(/ *, */).indexOf('upgrade') >= 0 &&
-    upgrade.toLowerCase() === 'websocket';
+  return request.method === 'GET' && connection.toLowerCase().split(/ *, */).indexOf('upgrade') >= 0 && upgrade.toLowerCase() === 'websocket';
 };
 
 export default isWebSocket;
