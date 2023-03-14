@@ -71,7 +71,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
     idleCheckTimeout: config.idleCheckTimeout,
   });
   const bodyParser = createBodyParser({ limitRequestBody: config.limitRequestBody, shouldError: true });
-  const aliasCache = {};
+  const aliasCache: Record<string, string> = {};
   const workerCache = {};
 
   return async (request, response, next) => {
@@ -91,8 +91,8 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
         resolve();
       });
 
-      await Promise.race([new Promise((res, rej) => setTimeout(rej, config.limitRequestTimeout)), new Promise((res) => bodyParser(request, response, res))]);
-      let indexPath;
+      await Promise.race([new Promise((_res, rej) => setTimeout(rej, config.limitRequestTimeout)), new Promise((res) => bodyParser(request, response, res))]);
+      let indexPath: string;
 
       if (aliasCache[pathname] && fs.existsSync(aliasCache[pathname])) {
         isWorker = true;
@@ -120,7 +120,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
                 indexPath = checkIndexFilePath;
                 aliasCache[pathname] = checkIndexFilePath;
                 setTimeout(() => {
-                  aliasCache[pathname] = null;
+                  aliasCache[pathname] = '';
                   delete aliasCache[pathname];
                 }, 5000);
                 return true;
@@ -132,7 +132,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
               isWorker = true;
               workerCache[pathname] = currentPath;
               setTimeout(() => {
-                workerCache[pathname] = null;
+                workerCache[pathname] = '';
                 delete workerCache[pathname];
               }, 5000);
             }

@@ -1,8 +1,10 @@
+import { Request, Response, NextFunction } from 'express';
+
 const ignoredMethods = ['get', 'delete', 'options', 'head'];
 
-const bodyParser =
+const createBodyParser =
   (config = { limitRequestBody: 1000000, shouldError: true }) =>
-  (request, response, next) => {
+  (request: Request, response: Response, next: NextFunction) => {
     let body = '';
 
     if (ignoredMethods.includes(request.method.toLowerCase())) {
@@ -35,4 +37,4 @@ const bodyParser =
     });
   };
 
-export default bodyParser;
+export default createBodyParser;
