@@ -9,3 +9,4 @@ nodemon.json
 tsconfig.json
 rollup.config.js
 .eslintrc.js
+.cache
