@@ -16,6 +16,7 @@ module.exports = {
     ...Object.keys(packageJson.dependencies || {}),
     'path',
     'fs',
+    'fs/promises',
     'crypto',
     'child_process',
     'stream',
