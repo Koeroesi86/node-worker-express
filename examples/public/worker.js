@@ -1,4 +1,17 @@
 module.exports = (event, callback = () => {}) => {
+  if (!(['GET', 'HEAD'].includes(event.httpMethod)) || event.path !== '/') {
+    callback({
+      statusCode: 404,
+      headers: {
+        'Content-Type': 'text/plain',
+        'Cache-Control': 'public, max-age=0',
+      },
+      body: `${event.path} does not exist`,
+      isBase64Encoded: false,
+    });
+    return;
+  }
+
   console.log(event);
   callback({
     statusCode: 200,
@@ -13,7 +26,10 @@ module.exports = (event, callback = () => {}) => {
         <title>It ${process.env.EXAMPLE}!</title>
       </head>
       <body>
-        <h1><img src="/favicon.ico" style="margin-right: 12px;" />It ${process.env.EXAMPLE}!</h1>
+        <h1>
+          <img src="/favicon_notexist.ico" onerror="this.onerror=null;this.src='/favicon.ico';" />
+          It ${process.env.EXAMPLE}!
+        </h1>
         <p id="time"></p>
         <script type="text/javascript">
           (function() {

@@ -1,11 +1,13 @@
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { Writable } from 'stream';
 import { InvokableWorker, ResponseEvent } from './types';
+import fileExists from './utils/fileExists';
 
-let timer;
+let timer: NodeJS.Timeout | undefined;
 
 const features = {
   enableEmit: false,
@@ -132,17 +134,18 @@ function getCharset(body: Buffer, fileName: string): boolean | string {
   return false;
 }
 
-const staticWorker: InvokableWorker = (event, callback = () => {}) => {
+const staticWorker: InvokableWorker = async (event, callback = () => {}) => {
   debounce(() => {
     console.log('Exiting static worker.');
     process.exit(0);
   }, 1000 * 60 * 30);
   const currentPath = `${event.path.replace(/\.{2,}/, '')}${/\/$/.test(event.path) ? 'index.html' : ''}`;
   const fileName = path.resolve(event.rootPath, `.${currentPath}`);
-  if (['GET', 'HEAD'].includes(event.httpMethod) && fs.existsSync(fileName)) {
+
+  if (['GET', 'HEAD'].includes(event.httpMethod) && (await fileExists(fileName))) {
     // TODO: range request
-    const bodyBuffer = fs.readFileSync(fileName);
-    const stats = fs.statSync(fileName);
+    const bodyBuffer = await fs.readFile(fileName);
+    const stats = await fs.stat(fileName);
     const extension = path.extname(fileName);
     const contentType = getContentType(extension);
     const currentEtag = etag(bodyBuffer);
@@ -190,7 +193,7 @@ const staticWorker: InvokableWorker = (event, callback = () => {}) => {
         },
       });
 
-      fs.createReadStream(fileName, {
+      createReadStream(fileName, {
         // encoding: 'binary',
         // encoding: 'utf-8',
         emitClose: false,
@@ -209,7 +212,7 @@ const staticWorker: InvokableWorker = (event, callback = () => {}) => {
         'Content-Type': 'text/plain',
         'Cache-Control': 'public, max-age=0',
       },
-      body: `${fileName} does not exist`,
+      body: `${currentPath} does not exist`,
       isBase64Encoded: false,
     });
   }
