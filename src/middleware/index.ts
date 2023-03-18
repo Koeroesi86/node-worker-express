@@ -1,6 +1,5 @@
 import { v4 as uuid } from 'uuid';
 import path from 'path';
-import fs from 'fs';
 import url from 'url';
 import { WORKER_EVENT } from '../constants';
 import WorkerPool from '../utils/workerPool';
@@ -11,6 +10,8 @@ import getClientIp from '../utils/getClientIp';
 import createBodyParser from './bodyParser';
 import { RequestHandler } from 'express';
 import { RequestEvent, WorkerOutputEvent } from 'src/types';
+import resolvePath from 'src/utils/resolvePath';
+import fileExists from 'src/utils/fileExists';
 
 type MiddlewareOptions = {
   root: string;
@@ -72,7 +73,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
   });
   const bodyParser = createBodyParser({ limitRequestBody: config.limitRequestBody, shouldError: true });
   const aliasCache: Record<string, string> = {};
-  const workerCache = {};
+  const workerCache: Record<string, string> = {};
 
   return async (request, response, next) => {
     const { query: queryStringParameters, pathname } = url.parse(request.url, true);
@@ -83,61 +84,38 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
       let currentPathFragments = pathFragments.slice(0);
       let pathExists = false;
 
-      await new Promise<void>((resolve, reject) => {
-        if (pathFragments.find((p) => ForbiddenPaths.includes(p))) {
-          config.onForbiddenPath(request, response);
-          reject();
-        }
-        resolve();
-      });
+      if (pathFragments.find((p) => ForbiddenPaths.includes(p))) {
+        config.onForbiddenPath(request, response);
+        throw new Error('Forbidden path');
+      }
 
       await Promise.race([new Promise((_res, rej) => setTimeout(rej, config.limitRequestTimeout)), new Promise((res) => bodyParser(request, response, res))]);
       let indexPath: string;
 
-      if (aliasCache[pathname] && fs.existsSync(aliasCache[pathname])) {
-        isWorker = true;
+      if (aliasCache[pathname] && (await fileExists(aliasCache[pathname]))) {
+        isWorker = false;
         indexPath = aliasCache[pathname];
-      } else if (workerCache[pathname] && fs.existsSync(workerCache[pathname])) {
+      } else if (workerCache[pathname] && (await fileExists(workerCache[pathname]))) {
         isWorker = true;
         indexPath = workerCache[pathname];
       } else {
-        indexPath = path.join(rootPath, ...currentPathFragments);
+        const resolved = await resolvePath(rootPath, currentPathFragments, config.index);
+        indexPath = resolved.indexPath;
+        isWorker = resolved.isWorker;
+      }
 
-        for (let i = currentPathFragments.length; i >= 0 && !pathExists; i--) {
-          if (pathExists) continue;
-          currentPathFragments.splice(i);
-          const currentPath = path.join(rootPath, ...currentPathFragments);
-          pathExists = fs.existsSync(currentPath);
-          if (!pathExists) continue;
-          const currentStats = fs.statSync(currentPath);
-
-          if (pathExists && currentStats.isDirectory()) {
-            // index fallback
-            pathExists = !!config.index.find((indexFile) => {
-              const checkIndexFilePath = path.join(currentPath, indexFile);
-              if (fs.existsSync(checkIndexFilePath)) {
-                isWorker = true;
-                indexPath = checkIndexFilePath;
-                aliasCache[pathname] = checkIndexFilePath;
-                setTimeout(() => {
-                  aliasCache[pathname] = '';
-                  delete aliasCache[pathname];
-                }, 5000);
-                return true;
-              }
-            });
-            if (pathExists) break;
-          } else if (pathExists && currentStats.isFile()) {
-            if (config.index.includes(currentPathFragments[currentPathFragments.length - 1])) {
-              isWorker = true;
-              workerCache[pathname] = currentPath;
-              setTimeout(() => {
-                workerCache[pathname] = '';
-                delete workerCache[pathname];
-              }, 5000);
-            }
-          }
-        }
+      if (!pathExists) {
+        //
+      } else if (isWorker) {
+        workerCache[pathname] = indexPath;
+        setTimeout(() => {
+          delete workerCache[pathname];
+        }, 5000);
+      } else {
+        aliasCache[pathname] = indexPath;
+        setTimeout(() => {
+          delete aliasCache[pathname];
+        }, 5000);
       }
 
       const event: RequestEvent = {
@@ -238,9 +216,9 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
             request.socket.write(constructWsMessage(responseEvent.event.frame));
           }
 
-          if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
-            worker.busy = false;
-          }
+          // if (responseEvent.type === WORKER_EVENT.REQUEST_ACKNOWLEDGE) {
+          //   worker.busy = false;
+          // }
         }
       };
 

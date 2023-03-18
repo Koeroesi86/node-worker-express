@@ -13,7 +13,7 @@ module.exports = (event, callback = () => {}) => {
         <title>It ${process.env.EXAMPLE}!</title>
       </head>
       <body>
-        <h1>It ${process.env.EXAMPLE}!</h1>
+        <h1><img src="/favicon.ico" style="margin-right: 12px;" />It ${process.env.EXAMPLE}!</h1>
         <p id="time"></p>
         <script type="text/javascript">
           (function() {
