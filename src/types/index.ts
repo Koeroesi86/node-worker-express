@@ -45,4 +45,4 @@ export type WSFrameEvent = {
   frame: string;
 };
 
-export type InvokableWorker = (event: RequestEvent, callback: (e: ResponseEvent) => void) => void;
+export type InvokableWorker = (event: RequestEvent, callback: (e: ResponseEvent) => void) => unknown;
