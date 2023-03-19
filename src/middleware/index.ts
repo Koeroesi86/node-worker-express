@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import path from 'path';
 import url from 'url';
-import { WORKER_EVENT } from '../constants';
+import { DefaultOptions, ForbiddenPaths, Protocols, WORKER_EVENT } from '../constants';
 import WorkerPool from '../utils/workerPool';
 import isWebSocket from '../utils/isWebSocket';
 import parseWsMessage from '../utils/parseWsMessage';
@@ -9,53 +9,9 @@ import constructWsMessage from '../utils/constructWsMessage';
 import getClientIp from '../utils/getClientIp';
 import createBodyParser from './bodyParser';
 import { RequestHandler } from 'express';
-import { RequestEvent, WorkerOutputEvent } from 'src/types';
+import { MiddlewareOptions, RequestEvent, WorkerOutputEvent } from 'src/types';
 import resolvePath from 'src/utils/resolvePath';
 import fileExists from 'src/utils/fileExists';
-
-type MiddlewareOptions = {
-  root: string;
-  limit?: number;
-  limitPerPath?: number | ((path: string) => number);
-  limitRequestBody?: number;
-  limitRequestTimeout?: number;
-  idleCheckTimeout?: number;
-  onStdout?: (data: Buffer) => void;
-  onStderr?: (data: Buffer) => void;
-  onExit?: void;
-  index?: string[];
-  env?: object;
-  staticWorker?: string;
-  cwd?: string;
-};
-
-const ForbiddenPaths = ['..'];
-
-const Protocols = {
-  http: 'HTTP',
-  websocket: 'WS',
-};
-
-const DefaultOptions = {
-  root: null,
-  limit: 0,
-  limitPerPath: 0,
-  limitRequestBody: 1000000,
-  limitRequestTimeout: 5000,
-  idleCheckTimeout: 5,
-  onStdout: () => {},
-  onStderr: () => {},
-  onExit: () => {},
-  onForbiddenPath: (request, response) => {
-    response.writeHead(500, { 'Content-Type': 'text/plain' });
-    response.end();
-    request.connection.destroy();
-  },
-  index: [],
-  env: {},
-  staticWorker: path.resolve(__dirname, './staticWorker.js'),
-  cwd: process.cwd(),
-};
 
 const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
   const config = {
@@ -86,7 +42,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
 
       if (pathFragments.find((p) => ForbiddenPaths.includes(p))) {
         config.onForbiddenPath(request, response);
-        throw new Error('Forbidden path');
+        return;
       }
 
       await Promise.race([new Promise((_res, rej) => setTimeout(rej, config.limitRequestTimeout)), new Promise((res) => bodyParser(request, response, res))]);
@@ -95,13 +51,16 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
       if (aliasCache[pathname] && (await fileExists(aliasCache[pathname]))) {
         isWorker = false;
         indexPath = aliasCache[pathname];
+        pathExists = true;
       } else if (workerCache[pathname] && (await fileExists(workerCache[pathname]))) {
         isWorker = true;
         indexPath = workerCache[pathname];
+        pathExists = true;
       } else {
         const resolved = await resolvePath(rootPath, currentPathFragments, config.index);
         indexPath = resolved.indexPath;
         isWorker = resolved.isWorker;
+        pathExists = resolved.pathExists;
       }
 
       if (!pathExists) {

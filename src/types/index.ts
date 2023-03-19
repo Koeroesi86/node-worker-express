@@ -1,4 +1,5 @@
 import { WORKER_EVENT } from '../constants';
+import { Request, Response } from 'express';
 
 export type RequestEvent = {
   httpMethod: string;
@@ -46,3 +47,20 @@ export type WSFrameEvent = {
 };
 
 export type InvokableWorker = (event: RequestEvent, callback: (e: ResponseEvent) => void) => unknown;
+
+export interface MiddlewareOptions {
+  root: string;
+  limit?: number;
+  limitPerPath?: number | ((path: string) => number);
+  limitRequestBody?: number;
+  limitRequestTimeout?: number;
+  idleCheckTimeout?: number;
+  onStdout?: (data: Buffer) => void;
+  onStderr?: (data: Buffer) => void;
+  onExit?: (code: number, workerPath: string, id: string) => void;
+  onForbiddenPath: (request: Request, response: Response) => unknown;
+  index?: string[];
+  env?: object;
+  staticWorker?: string;
+  cwd?: string;
+}

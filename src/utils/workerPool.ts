@@ -17,6 +17,12 @@ const createWorkerCommand = (workerPath) => {
   }
 };
 
+interface WorkerPoolParams {
+  overallLimit?: number;
+  idleCheckTimeout?: number;
+  onExit?: (code: number, workerPath: string, id: string) => void;
+}
+
 class WorkerPool {
   protected readonly overallLimit: number;
   protected readonly idleCheckTimeout: number;
@@ -24,7 +30,7 @@ class WorkerPool {
   protected readonly workers: Record<string, Record<string, Worker>>;
   private creating: boolean;
 
-  constructor({ overallLimit = 0, idleCheckTimeout = 5, onExit = () => {} }) {
+  constructor({ overallLimit = 0, idleCheckTimeout = 5, onExit = () => {} }: WorkerPoolParams) {
     this.overallLimit = overallLimit;
     this.idleCheckTimeout = idleCheckTimeout;
     this.onExit = onExit;
