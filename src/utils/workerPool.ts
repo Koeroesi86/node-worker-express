@@ -38,46 +38,41 @@ class WorkerPool {
     pools.push(this);
 
     this.creating = false;
-
-    this.getWorker = this.getWorker.bind(this);
-    this.onClose = this.onClose.bind(this);
-    this.getNonBusyId = this.getNonBusyId.bind(this);
-    this.getWorkerCount = this.getWorkerCount.bind(this);
   }
 
-  onClose() {
+  onClose = () => {
     Object.keys(this.workers).forEach((workerPath) => {
       const current = this.workers[workerPath];
       Object.keys(current).forEach((id) => {
         current[id].terminate();
       });
     });
-  }
+  };
 
-  getNonBusyId(workerPath) {
+  getNonBusyId = (workerPath) => {
     return this.workers[workerPath]
       ? Object.keys(this.workers[workerPath] || {}).find((id) => {
           return true; // !this.workers[workerPath][id].busy;
         })
       : undefined;
-  }
+  };
 
-  getWorkerCountForPath(p) {
+  getWorkerCountForPath = (p) => {
     return this.workers[p] ? Object.keys(this.workers[p]).length : 0;
-  }
+  };
 
-  getWorkerCount() {
+  getWorkerCount = () => {
     return Object.keys(this.workers).reduce((result, current) => this.getWorkerCountForPath(current) + result, 0);
-  }
+  };
 
-  isBeyondLimit(workerPath, limit) {
+  isBeyondLimit = (workerPath, limit) => {
     return (
       (this.workers[workerPath] && limit > 0 && this.getWorkerCountForPath(workerPath) >= limit) ||
       (this.overallLimit > 0 && this.getWorkerCount() >= this.overallLimit)
     );
-  }
+  };
 
-  async getWorker(workerPath, options = {}, limit = 0): Promise<Worker> {
+  getWorker = async (workerPath, options = {}, limit = 0): Promise<Worker> => {
     const nonBusyId = this.getNonBusyId(workerPath);
     // TODO: tidy up
     if (nonBusyId !== undefined) {
@@ -105,7 +100,7 @@ class WorkerPool {
 
     this.creating = false;
     return instance;
-  }
+  };
 }
 
 export default WorkerPool;
