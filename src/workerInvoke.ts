@@ -1,7 +1,7 @@
 import { WORKER_EVENT } from './constants';
 import { InvokableWorker, ResponseEvent, WorkerInputEvent, WorkerOutputEvent, WSFrameEvent } from './types';
 
-const worker = require(process.argv[2]) as InvokableWorker;
+const worker = require(process.argv.pop()) as InvokableWorker;
 
 function messageListener(message: WorkerInputEvent) {
   if (message.type === WORKER_EVENT.REQUEST) {

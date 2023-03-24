@@ -13,7 +13,7 @@ export enum WORKER_EVENT {
   WS_CONNECTION_CLOSE_ACKNOWLEDGE = 'WS_CONNECTION_CLOSE_ACK',
 }
 
-export const ForbiddenPaths = ['..'] as const;
+export const ForbiddenPaths: readonly string[] = ['..'] as const;
 
 export enum Protocols {
   http = 'HTTP',

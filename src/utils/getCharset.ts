@@ -13,7 +13,7 @@ async function getCharset(body: Buffer, fileName: string): Promise<string> {
   if (body.indexOf('ï»¿') === 0) return 'iso-8859-1';
 
   try {
-    return execSync(`file -b --mime-encoding ${fileName}`).toString('utf8').trim();
+    return execSync(`file -b --mime-encoding ${fileName}`, { encoding: 'utf8' }).trim();
   } catch (e) {
     //
   }

@@ -105,7 +105,7 @@ const workerMiddleware = (options: MiddlewareOptions): RequestHandler => {
               cwd: process.cwd(),
               stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
             },
-            1
+            typeof config.limitPerPath === 'function' ? config.limitPerPath(indexPath) : config.limitPerPath
           );
 
       const requestId = uuid();
